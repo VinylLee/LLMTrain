@@ -36,9 +36,13 @@ def normalize_prediction_3(text):
     if not isinstance(text, str):
         return None
     t = text.strip().lower().rstrip('.!?')
-    if t in LABELS_3:
-        return t
-    found = [lab for lab in LABELS_3 if lab in t]
+    # normalized-space for word-boundary checks (turn underscores/punctuation into spaces)
+    t_space = re.sub(r'[^a-z0-9]+', ' ', t).strip()
+    # direct exact matches (either raw or normalized)
+    if t in LABELS_3 or t_space in LABELS_3:
+        return t_space if t_space in LABELS_3 else t
+    # word-boundary search to avoid matching 'entailment' inside 'not_entailment'
+    found = [lab for lab in LABELS_3 if re.search(r"\\b" + re.escape(lab) + r"\\b", t_space)]
     if found:
         return found[0]
     mapping = {'entailment': 'entailment', 'entailed': 'entailment', 'e': 'entailment',
@@ -46,7 +50,8 @@ def normalize_prediction_3(text):
                'neutral': 'neutral', 'n': 'neutral', '1': 'neutral',
                'contradiction': 'contradiction', 'contradictory': 'contradiction',
                'c': 'contradiction', 'contradict': 'contradiction', '2': 'contradiction'}
-    t_clean = re.sub(r'[^a-z0-9]', '', t)
+    # keep underscores for multi-word normalized tokens (e.g. 'not_entailment')
+    t_clean = re.sub(r'[^a-z0-9]+', '_', t).strip('_')
     return mapping.get(t_clean, None)
 
 
@@ -55,30 +60,32 @@ def normalize_prediction_binary(text):
     if not isinstance(text, str):
         return None
     t = text.strip().lower().rstrip('.!?')
-    # Direct match
-    if t in ('entailment', 'not_entailment'):
-        return t
-    # Detect entailment
-    if t == 'entailment' or t in ('entailed', 'e', '0'):
+    t_space = re.sub(r'[^a-z0-9]+', ' ', t).strip()
+    # Direct exact matches (handle both underscore and space forms)
+    if t in ('entailment', 'not_entailment') or t_space in ('entailment', 'not entailment'):
+        return 'not_entailment' if (t == 'not_entailment' or t_space == 'not entailment') else 'entailment'
+    # Detect entailment short forms
+    if t == 'entailment' or t in ('entailed', 'e', '0') or t_space in ('entailed', 'e', '0'):
         return 'entailment'
-    # Detect not_entailment — any neutral/contradiction answer counts as not_entailment
+    # Detect not_entailment — look for whole-word matches (handles 'not entailment')
     for lab in ('not_entailment', 'neutral', 'contradiction', 'contradictory', 'contradict'):
-        if lab in t:
+        lab_check = lab.replace('_', ' ')
+        if re.search(r"\\b" + re.escape(lab_check) + r"\\b", t_space):
             return 'not_entailment'
-    # Numeric
+    # Numeric / compact mapping
     mapping = {'entailment': 'entailment', 'entailed': 'entailment', 'e': 'entailment',
                '0': 'entailment',
                'neutral': 'not_entailment', 'n': 'not_entailment', '1': 'not_entailment',
                'contradiction': 'not_entailment', 'contradictory': 'not_entailment',
                'c': 'not_entailment', 'contradict': 'not_entailment', '2': 'not_entailment',
                'not_entailment': 'not_entailment', 'not entailment': 'not_entailment'}
-    t_clean = re.sub(r'[^a-z0-9]', '', t).replace(' ', '_')
+    t_clean = re.sub(r'[^a-z0-9]+', '_', t).strip('_')
     if t_clean in mapping:
         return mapping[t_clean]
-    # Fallback: check if "not" appears before "entailment" (flexible match)
-    if 'not' in t and 'entail' in t:
+    # Flexible fallback checks using word tokens
+    if re.search(r"\\bnot\\b", t_space) and re.search(r"\\bentail\\b", t_space):
         return 'not_entailment'
-    if 'entail' in t:
+    if re.search(r"\\bentail\\b", t_space):
         return 'entailment'
     return None
 

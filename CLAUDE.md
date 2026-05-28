@@ -59,6 +59,28 @@ python scripts/test_deepseek.py --data-dir data --run-id my_experiment_1
 - `DEEPSEEK_OPENAI_BASE_URL` / `DEEPSEEK_API_URL` / `DEEPSEEK_URL` — API 地址（自动补 `/v1/chat/completions`）
 - `LLM_NAME` — 默认模型名
 
+### 本地模型（LM Studio）
+
+LM Studio 运行在 `localhost:1234`，OpenAI 兼容接口。
+
+```bash
+# 方法 1：覆盖 .env 变量（推荐）
+python scripts/test_deepseek.py --env /tmp/lmstudio.env
+
+# 方法 2：使用专门的 env 文件
+echo "DEEPSEEK_API_URL=http://localhost:1234/v1/chat/completions" > /tmp/lmstudio.env
+python scripts/test_deepseek.py --env /tmp/lmstudio.env --llm phi-4
+
+# 方法 3：环境变量临时覆盖
+DEEPSEEK_API_URL=http://localhost:1234/v1/chat/completions \
+  DEEPSEEK_API_KEY="" \
+  python scripts/test_deepseek.py --llm phi-4
+```
+
+`.env` 中预置了 LM Studio 地址和模型名：
+- `LMSTUDIO_BASE_URL=http://localhost:1234`
+- `LMSTUDIO_PHI4=phi-4`
+
 ### `scripts/evaluate.py` — 评估预测结果并生成报告
 
 ```bash

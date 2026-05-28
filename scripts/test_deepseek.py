@@ -69,7 +69,11 @@ def load_env(path=None, api_url_env=None, api_key_env=None):
         )
     # Auto-append chat completions path if URL looks like a base URL
     if api_url and not api_url.rstrip('/').endswith(('chat/completions', '/generate', '/v1/completions')):
-        api_url = api_url.rstrip('/') + '/v1/chat/completions'
+        base = api_url.rstrip('/')
+        if base.endswith('/v1'):
+            api_url = base + '/chat/completions'
+        else:
+            api_url = base + '/v1/chat/completions'
     return api_url or None, api_key
 
 

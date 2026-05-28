@@ -13,6 +13,7 @@ build/
 
 # --- Data (test datasets are large, download from source) ---
 data/
+test_only_MR/
 
 # --- Output (API predictions, evaluation reports) ---
 output/
