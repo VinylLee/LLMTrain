@@ -41,8 +41,13 @@ def normalize_prediction_3(text):
     # direct exact matches (either raw or normalized)
     if t in LABELS_3 or t_space in LABELS_3:
         return t_space if t_space in LABELS_3 else t
+    # Reject binary-classification patterns (not_entailment / not entailment)
+    # — these don't belong in 3-class output. Check BEFORE the word-boundary
+    # search so 'entailment' inside 'not entailment' isn't misclassified.
+    if re.search(r'\bnot[ _]entail', t_space):
+        return None
     # word-boundary search to avoid matching 'entailment' inside 'not_entailment'
-    found = [lab for lab in LABELS_3 if re.search(r"\\b" + re.escape(lab) + r"\\b", t_space)]
+    found = [lab for lab in LABELS_3 if re.search(r"\b" + re.escape(lab) + r"\b", t_space)]
     if found:
         return found[0]
     mapping = {'entailment': 'entailment', 'entailed': 'entailment', 'e': 'entailment',
@@ -70,7 +75,7 @@ def normalize_prediction_binary(text):
     # Detect not_entailment — look for whole-word matches (handles 'not entailment')
     for lab in ('not_entailment', 'neutral', 'contradiction', 'contradictory', 'contradict'):
         lab_check = lab.replace('_', ' ')
-        if re.search(r"\\b" + re.escape(lab_check) + r"\\b", t_space):
+        if re.search(r"\b" + re.escape(lab_check) + r"\b", t_space):
             return 'not_entailment'
     # Numeric / compact mapping
     mapping = {'entailment': 'entailment', 'entailed': 'entailment', 'e': 'entailment',

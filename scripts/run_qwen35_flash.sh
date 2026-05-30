@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
-# 使用 qwen3.5-flash-2026-02-23 (百炼) 串行运行所有数据集
 # 从最小数据集开始跑，尽量在额度耗尽前多跑有效数据
 set -euo pipefail
 
-LLM="qwen3.5-flash-2026-02-23"
+LLM="qwen3.6-flash"
 DELAY=0.1
 OUTPUT_DIR="output"
 RUN_ID=$(date +%Y%m%d_%H%M%S)

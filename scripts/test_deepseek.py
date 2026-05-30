@@ -150,13 +150,13 @@ def build_nli_prompt(premise, hypothesis, binary=False):
             f"Premise: {premise}\n"
             f"Hypothesis: {hypothesis}\n"
             "Question: Is the hypothesis entailed by the premise? "
-            "Answer with one of: entailment, not_entailment."
+            "Answer ONLY with one of: entailment, not_entailment."
         )
     return (
         f"Premise: {premise}\n"
         f"Hypothesis: {hypothesis}\n"
         "Question: Is the hypothesis entailed by the premise? "
-        "Answer with one of: entailment, neutral, contradiction."
+        "Answer ONLY with one of: entailment, neutral, contradiction."
     )
 
 
