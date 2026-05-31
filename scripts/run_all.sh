@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
-# 依次运行 data/ 下所有 MR 数据的预测 + 评估
-# 每跑完一个数据集就评估该数据集，最后出全量汇总报告
-# 输出结构: output/<run_id>/<llm>/<dataset>/<mr>.jsonl
-# Usage: bash scripts/run_all.sh [--llm deepseek-chat] [--delay 0.3]
+# 对指定任务下的所有数据集依次执行预测 + 评估
+# 输出结构: output/<llm>/<dataset>/<mr>.jsonl
+# Usage:
+#   bash scripts/run_all.sh --llm phi-4 --delay 0.5
+#   bash scripts/run_all.sh --llm qwen --task nli --api-url-env LMSTUDIO_BASE_URL --api-key-env LMSTUDIO_KEY
 set -euo pipefail
 
 LLM="deepseek-chat"
 DELAY=0.3
 OUTPUT_DIR="output"
-DATA_DIR="data"
+TASK="nli"
 API_URL_ENV=""
 API_KEY_ENV=""
 
@@ -17,21 +18,23 @@ while [[ $# -gt 0 ]]; do
     --llm) LLM="$2"; shift 2 ;;
     --delay) DELAY="$2"; shift 2 ;;
     --output-dir) OUTPUT_DIR="$2"; shift 2 ;;
-    --data-dir) DATA_DIR="$2"; shift 2 ;;
+    --data-dir) TASK="$2"; shift 2 ;;  # --data-dir sets the task subdirectory under data/
+    --task) TASK="$2"; shift 2 ;;
     --api-url-env) API_URL_ENV="$2"; shift 2 ;;
     --api-key-env) API_KEY_ENV="$2"; shift 2 ;;
     *) echo "Unknown: $1"; exit 1 ;;
   esac
 done
 
-TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+DATA_DIR="data/$TASK"
 SAFE_LLM="${LLM// /_}"
 echo "========================================"
-echo "  Batch Run: $TIMESTAMP"
+echo "  Batch Run"
 echo "  LLM:      $LLM"
+echo "  Task:     $TASK"
 echo "  Delay:    ${DELAY}s"
 echo "  Data:     $DATA_DIR/"
-echo "  Output:   $OUTPUT_DIR/$TIMESTAMP/$SAFE_LLM/"
+echo "  Output:   $OUTPUT_DIR/$SAFE_LLM/"
 echo "========================================"
 
 # ---- Step 1: Predict ----
@@ -42,10 +45,10 @@ for ds_dir in "$DATA_DIR"/*_MR; do
   echo ">>> [predict] $ds_name ($count files)"
 
   conda run -n LLMTrain3.9 \
-    python3 scripts/test_deepseek.py \
+    python3 scripts/test_llm.py \
       --data-dir "$ds_dir" \
       --output-dir "$OUTPUT_DIR" \
-      --run-id "$TIMESTAMP" \
+      --run-id "$SAFE_LLM" \
       --delay "$DELAY" \
       --llm "$LLM" \
       ${API_URL_ENV:+--api-url-env "$API_URL_ENV"} \
@@ -64,7 +67,7 @@ for ds_dir in "$DATA_DIR"/*_MR; do
   ds_name=$(basename "$ds_dir" | sed 's/_test_MR//')
   echo ">>> [eval] $ds_name"
 
-  ds_output_dir="$OUTPUT_DIR/$TIMESTAMP/$SAFE_LLM/$ds_name"
+  ds_output_dir="$OUTPUT_DIR/$SAFE_LLM/$ds_name"
   combined="$ds_output_dir/${ds_name}_all.jsonl"
 
   if [ -d "$ds_output_dir" ]; then
@@ -85,13 +88,13 @@ done
 
 # ---- Step 3: Evaluate all combined ----
 echo ">>> [eval] ALL combined"
-combined_all="$OUTPUT_DIR/$TIMESTAMP/$SAFE_LLM/all_combined.jsonl"
-cat "$OUTPUT_DIR/$TIMESTAMP/$SAFE_LLM"/*/*_all.jsonl 2>/dev/null > "$combined_all" || true
+combined_all="$OUTPUT_DIR/$SAFE_LLM/all_combined.jsonl"
+cat "$OUTPUT_DIR/$SAFE_LLM"/*/*_all.jsonl 2>/dev/null > "$combined_all" || true
 
 if [ -s "$combined_all" ]; then
   conda run -n LLMTrain3.9 \
     python3 scripts/evaluate.py "$combined_all" \
-      --report "$OUTPUT_DIR/$TIMESTAMP/$SAFE_LLM/all_report.txt" \
+      --report "$OUTPUT_DIR/$SAFE_LLM/all_report.txt" \
       --group-by _source mr_type \
       2>&1 | tail -3
 fi
@@ -100,7 +103,7 @@ fi
 echo
 echo "========================================"
 echo "  Output directory:"
-echo "    $OUTPUT_DIR/$TIMESTAMP/$SAFE_LLM/"
+echo "    $OUTPUT_DIR/$SAFE_LLM/"
 echo "  Reports:"
-find "$OUTPUT_DIR/$TIMESTAMP" -name '*_report.txt' 2>/dev/null | sed 's/^/    /'
+find "$OUTPUT_DIR/$SAFE_LLM" -name '*_report.txt' 2>/dev/null | sed 's/^/    /'
 echo "========================================"

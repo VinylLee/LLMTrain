@@ -1,21 +1,32 @@
 #!/usr/bin/env bash
-# 从最小数据集开始跑，尽量在额度耗尽前多跑有效数据
+# 从最小数据集开始串行跑 NLI 预测 + 评估
 set -euo pipefail
 
 LLM="qwen3.6-flash"
 DELAY=0.1
 OUTPUT_DIR="output"
-RUN_ID=$(date +%Y%m%d_%H%M%S)
+TASK="nli"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --llm) LLM="$2"; shift 2 ;;
+    --delay) DELAY="$2"; shift 2 ;;
+    --task) TASK="$2"; shift 2 ;;
+    *) echo "Unknown: $1"; exit 1 ;;
+  esac
+done
+
 SAFE_LLM="${LLM// /_}"
+DATA_DIR="data/$TASK"
 
 echo "========================================"
-echo "  Run: $RUN_ID"
+echo "  Run"
 echo "  LLM: $LLM"
 echo "  Delay: ${DELAY}s"
-echo "  Output: $OUTPUT_DIR/$RUN_ID/$SAFE_LLM/"
+echo "  Output: $OUTPUT_DIR/$SAFE_LLM/"
 echo "========================================"
 
-# 按数据量从小到大排列，优先跑小的
+# 按数据量从小到大排列
 DATASETS=(
   "rte_test_MR"
   "sick_test_MR"
@@ -25,8 +36,8 @@ DATASETS=(
 )
 
 # ---- Step 1: Predict ----
-for ds_dir in "${DATASETS[@]}";  do
-  full_path="data/$ds_dir"
+for ds_dir in "${DATASETS[@]}"; do
+  full_path="$DATA_DIR/$ds_dir"
   [ -d "$full_path" ] || continue
   ds_name=$(basename "$full_path" | sed 's/_test_MR//')
   count=$(find "$full_path" -name '*.json' -type f | wc -l)
@@ -34,10 +45,10 @@ for ds_dir in "${DATASETS[@]}";  do
   echo ">>> [predict] $ds_name ($count files, ~$total_lines lines)"
 
   conda run -n LLMTrain3.9 \
-    python3 scripts/test_deepseek.py \
+    python3 scripts/test_llm.py \
       --data-dir "$full_path" \
       --output-dir "$OUTPUT_DIR" \
-      --run-id "$RUN_ID" \
+      --run-id "$SAFE_LLM" \
       --delay "$DELAY" \
       --llm "$LLM" \
       --api-url-env BAILIAN_BASE_URL \
@@ -54,11 +65,11 @@ echo "  Evaluating..."
 echo "========================================"
 
 for ds_dir in "${DATASETS[@]}"; do
-  full_path="data/$ds_dir"
+  full_path="$DATA_DIR/$ds_dir"
   [ -d "$full_path" ] || continue
   ds_name=$(basename "$full_path" | sed 's/_test_MR//')
 
-  ds_output_dir="$OUTPUT_DIR/$RUN_ID/$SAFE_LLM/$ds_name"
+  ds_output_dir="$OUTPUT_DIR/$SAFE_LLM/$ds_name"
   combined="$ds_output_dir/${ds_name}_all.jsonl"
 
   if [ -d "$ds_output_dir" ]; then
@@ -77,13 +88,13 @@ done
 
 # ---- Step 3: Evaluate all combined ----
 echo ">>> [eval] ALL combined"
-combined_all="$OUTPUT_DIR/$RUN_ID/$SAFE_LLM/all_combined.jsonl"
-cat "$OUTPUT_DIR/$RUN_ID/$SAFE_LLM"/*/*_all.jsonl 2>/dev/null > "$combined_all" || true
+combined_all="$OUTPUT_DIR/$SAFE_LLM/all_combined.jsonl"
+cat "$OUTPUT_DIR/$SAFE_LLM"/*/*_all.jsonl 2>/dev/null > "$combined_all" || true
 
 if [ -s "$combined_all" ]; then
   conda run -n LLMTrain3.9 \
     python3 scripts/evaluate.py "$combined_all" \
-      --report "$OUTPUT_DIR/$RUN_ID/$SAFE_LLM/all_report.txt" \
+      --report "$OUTPUT_DIR/$SAFE_LLM/all_report.txt" \
       --group-by _source mr_type \
       2>&1 | tail -5
 fi
@@ -91,7 +102,7 @@ fi
 # ---- Summary ----
 echo
 echo "========================================"
-echo "  Output: $OUTPUT_DIR/$RUN_ID/$SAFE_LLM/"
+echo "  Output: $OUTPUT_DIR/$SAFE_LLM/"
 echo "  Reports:"
-find "$OUTPUT_DIR/$RUN_ID" -name '*_report.txt' 2>/dev/null | sed 's/^/    /'
+find "$OUTPUT_DIR/$SAFE_LLM" -name '*_report.txt' 2>/dev/null | sed 's/^/    /'
 echo "========================================"

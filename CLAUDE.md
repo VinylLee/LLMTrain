@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code when working with this repository.
 
 ## Project Overview
 
@@ -8,45 +8,74 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Primary paper: `bare_jrnl_new_sample4.tex` (IEEEtran format).
 
+**Expanding scope**: The framework is being extended beyond NLI to other NLP tasks, and beyond DeepSeek to any LLM provider (OpenAI-compatible APIs, local models via LM Studio, etc.).
+
 ## Code Architecture
 
-Only one source script exists:
+### Core scripts
 
-- **`scripts/test_deepseek.py`** — Sends MR-transformed NLI examples to a DeepSeek LLM API and saves responses. Key components:
+- **`scripts/test_llm.py`** — Sends examples to any LLM API (OpenAI-compatible) and saves responses. Key components:
   - `extract_nli_fields()` — Parses NLI examples (premise, hypothesis, label) from various JSON formats
-  - `build_nli_prompt()` — Constructs the prompt template: "Premise: ... Hypothesis: ... Is the hypothesis entailed by the premise?"
-  - `call_deepseek()` — Makes the HTTP POST to the configured API endpoint
+  - `build_nli_prompt()` — Constructs the NLI prompt template
+  - `call_llm()` — Makes the HTTP POST to the configured API endpoint
   - `parse_dataset_mr()` — Extracts dataset name and MR type from file path for organizing output
-  - `process_file()` — Iterates over a JSONL file, calls the API, writes results to `output/<run_id>/<llm>/<dataset>/<mr>.jsonl`
+  - `process_file()` — Iterates over a JSONL file, calls the API, writes results to `output/<llm>/<dataset>/<mr>.jsonl`
+
+- **`scripts/run_all.sh`** — Batch runner: iterate all MR files in a task directory → predict → evaluate → report
+- **`scripts/evaluate.py`** — Evaluate prediction results and generate accuracy/F1/confusion-matrix reports
+- **`scripts/mrv.py`** — Compute MRV (Mutation Rate Value = error rate per MR and dataset)
+- **`scripts/mrv_excel.py`** — Export MRV report to Excel
 
 ## Data Structure
 
-Data lives in `data/{dataset}_test_MR/` directories. Each file is **JSONL** (one JSON object per line), not a JSON array.
+### Task-based layout
 
-**Datasets** (5): `snli_test_MR`, `mnlim_test_MR`, `mnlimm_test_MR`, `rte_test_MR`, `sick_test_MR`
+```
+data/
+  nli/                          # NLI task data
+    snli_test_MR/
+    mnlim_test_MR/
+    mnlimm_test_MR/
+    rte_test_MR/
+    sick_test_MR/
+  ...future tasks go here...
+```
+
+Each file is **JSONL** (one JSON object per line), not a JSON array.
 
 **Metamorphic Relations** (9): `adding_contradiction`, `antonym_substitution`, `conditional_clause`, `negation_flip`, `pronoun_substitution`, `summary`, `synonym_replacement`, `uninformative`, `voice_switch`
 
-Each line has fields: `premise`, `hypothesis`, `label` (int: 0/1/2 mapping to entailment/neutral/contradiction per dataset convention), `mr_type`, `mr_category`.
+Each line has fields: `premise`, `hypothesis`, `label` (int: 0/1/2), `mr_type`, `mr_category`.
+
+## Output Structure
+
+```
+output/
+  <llm_name>/                   # one directory per model
+    <dataset>/
+      <mr>.jsonl                # per-MR predictions
+      <dataset>_all.jsonl       # dataset-level merged results
+      <dataset>_report.txt      # per-dataset evaluation
+    all_combined.jsonl           # all datasets merged
+    all_report.txt               # full evaluation report (grouped by _source, mr_type)
+  _archive/                      # incomplete / legacy timestamp-based runs
+```
 
 ## Scripts
 
-### `scripts/test_deepseek.py` — 调用 LLM API 预测 NLI
+### `scripts/test_llm.py` — Run LLM inference on datasets
 
 ```bash
-# 激活环境（重要）
 conda activate LLMTrain3.9
 
-# 对 data/ 下所有 MR 数据跑预测
-python scripts/test_deepseek.py --data-dir data --output-dir output --delay 0.5 --llm deepseek-chat
+# Basic usage on NLI data
+python scripts/test_llm.py --data-dir data/nli --llm phi-4 --delay 0.5
 
-# 指定 .env 路径
-python scripts/test_deepseek.py --env .env --data-dir data --output-dir output
+# Custom run-id (default: auto-generated timestamp)
+python scripts/test_llm.py --data-dir data/nli --run-id my_experiment_1
 
-# 指定 run-id（不指定则自动生成时间戳）
-python scripts/test_deepseek.py --data-dir data --run-id my_experiment_1
-
-# 输出: output/<run_id>/<llm>/<dataset>/<mr>.jsonl（每行一个 JSON 对象）
+# Override API URL / key from .env
+python scripts/test_llm.py --data-dir data/nli --api-url-env LMSTUDIO_BASE_URL --api-key-env LMSTUDIO_KEY
 ```
 
 **自动任务识别**:
@@ -56,69 +85,63 @@ python scripts/test_deepseek.py --data-dir data --run-id my_experiment_1
 
 **配置** (`.env`):
 - `DEEPSEEK_KEY` / `DEEPSEEK_API_KEY` — API 密钥
-- `DEEPSEEK_OPENAI_BASE_URL` / `DEEPSEEK_API_URL` / `DEEPSEEK_URL` — API 地址（自动补 `/v1/chat/completions`）
+- `DEEPSEEK_OPENAI_BASE_URL` / `DEEPSEEK_API_URL` / `DEEPSEEK_URL` — API 地址
 - `LLM_NAME` — 默认模型名
+- `LMSTUDIO_BASE_URL=http://localhost:1234` — 本地 LM Studio
+- `LMSTUDIO_KEY=` — LM Studio 不需密钥
+- `BAILIAN_BASE_URL` / `BAILIAN_API_KEY` — 百炼平台
 
 ### 本地模型（LM Studio）
 
 LM Studio 运行在 `localhost:1234`，OpenAI 兼容接口。
 
 ```bash
-# 方法 1：覆盖 .env 变量（推荐）
-python scripts/test_deepseek.py --env /tmp/lmstudio.env
+# 使用 .env 中的 LM Studio 配置
+python scripts/test_llm.py --llm phi-4 --api-url-env LMSTUDIO_BASE_URL --api-key-env LMSTUDIO_KEY
 
-# 方法 2：使用专门的 env 文件
-echo "DEEPSEEK_API_URL=http://localhost:1234/v1/chat/completions" > /tmp/lmstudio.env
-python scripts/test_deepseek.py --env /tmp/lmstudio.env --llm phi-4
-
-# 方法 3：环境变量临时覆盖
+# 或环境变量覆盖
 DEEPSEEK_API_URL=http://localhost:1234/v1/chat/completions \
   DEEPSEEK_API_KEY="" \
-  python scripts/test_deepseek.py --llm phi-4
-```
-
-`.env` 中预置了 LM Studio 地址和模型名：
-- `LMSTUDIO_BASE_URL=http://localhost:1234`
-- `LMSTUDIO_PHI4=phi-4`
-
-### `scripts/evaluate.py` — 评估预测结果并生成报告
-
-```bash
-# 输出指标到控制台
-python scripts/evaluate.py output/results.jsonl
-
-# 按字段分组（数据集、MR 类型等）
-python scripts/evaluate.py output/results.jsonl --group-by _source mr_type
-
-# 指定报告输出路径（默认 output/<同名>_report.txt）
-python scripts/evaluate.py output/results.jsonl --report my_report.txt
-```
-
-**报告包含**: API 状态 / 总体指标(acc/precision/recall/F1) / 混淆矩阵 / 错误用例 / 分组统计 / Token 用量与费用估算
-
-**自动检测**: 根据 `meta.task` 字段自动区分二分类（nli-binary）和三分类（nli），使用对应标签集和评估逻辑。
-
-### Dependencies
-
-```bash
-pip install -r requirements.txt    # requests, python-dotenv
+  python scripts/test_llm.py --llm phi-4
 ```
 
 ### `scripts/run_all.sh` — 批量跑全量数据
 
 ```bash
-# 依次跑完 data/ 下所有数据集，每跑完一个就出评估报告，最后全量汇总
-bash scripts/run_all.sh
+# NLI 任务全量跑
+bash scripts/run_all.sh --llm phi-4 --delay 0.5
 
-# 自定义模型和延时
-bash scripts/run_all.sh --llm deepseek-chat --delay 0.3
+# 指定任务目录
+bash scripts/run_all.sh --task nli --llm deepseek-chat --delay 0.3
+
+# 使用 LM Studio
+bash scripts/run_all.sh --llm phi-4 --delay 0.5 --api-url-env LMSTUDIO_BASE_URL --api-key-env LMSTUDIO_KEY
 
 # 输出目录结构:
-#   output/<run_id>/<llm>/<dataset>/<mr>.jsonl       # 每个 MR 文件的预测结果
-#   output/<run_id>/<llm>/<dataset>/<ds>_all.jsonl    # 单个数据集合并
-#   output/<run_id>/<llm>/<dataset>/<ds>_report.txt   # 单个数据集评估报告
-#   output/<run_id>/<llm>/all_combined.jsonl           # 全量合并
-#   output/<run_id>/<llm>/all_report.txt               # 全量评估报告（按 _source, mr_type 分组）
+#   output/<llm>/<dataset>/<mr>.jsonl          # 每个 MR 文件的预测结果
+#   output/<llm>/<dataset>/<ds>_all.jsonl       # 单个数据集合并
+#   output/<llm>/<dataset>/<ds>_report.txt      # 单个数据集评估报告
+#   output/<llm>/all_combined.jsonl              # 全量合并
+#   output/<llm>/all_report.txt                  # 全量评估报告（按 _source, mr_type 分组）
+```
+
+### `scripts/evaluate.py` — 评估预测结果并生成报告
+
+```bash
+python scripts/evaluate.py output/<llm>/all_combined.jsonl
+python scripts/evaluate.py output/<llm>/all_combined.jsonl --group-by _source mr_type
+```
+
+### `scripts/mrv.py` — MRV 指标
+
+```bash
+python scripts/mrv.py output/<llm>/
+```
+
+### Dependencies
+
+```bash
+pip install -r requirements.txt    # requests, python-dotenv
 ```
 
 ## Research Context

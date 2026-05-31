@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+"""Run LLM inference on dataset JSON/JSONL files and save responses."""
 import os
 import sys
 import json
@@ -25,7 +26,7 @@ KNOWN_MRS = [
 def parse_dataset_mr(filepath):
     """Extract (dataset_name, mr_type) from a data file path.
 
-    Path example: data/rte_test_MR/rte_test_pronoun_substitution_20260119_213432.json
+    Path example: data/nli/rte_test_MR/rte_test_pronoun_substitution_20260119_213432.json
     Returns: ('rte', 'pronoun_substitution')
     """
     fname = os.path.splitext(os.path.basename(filepath))[0]
@@ -169,7 +170,7 @@ def detect_binary_dataset(path):
     return False
 
 
-def call_deepseek(api_url, api_key, llm, prompt, max_retries=3):
+def call_llm(api_url, api_key, llm, prompt, max_retries=3):
     headers = {'Content-Type': 'application/json'}
     if api_key:
         headers['Authorization'] = f'Bearer {api_key}'
@@ -216,7 +217,6 @@ def load_jsonl(path):
         if isinstance(data, list):
             return data
         elif isinstance(data, dict):
-            # Try common keys that might hold a list
             for k in ('data', 'examples', 'tests'):
                 if k in data and isinstance(data[k], list):
                     return data[k]
@@ -264,7 +264,7 @@ def process_file(path, api_url, api_key, llm, output_dir, run_id, delay):
 
             ts = datetime.utcnow().isoformat() + 'Z'
             try:
-                status, resp = call_deepseek(api_url, api_key, llm, prompt)
+                status, resp = call_llm(api_url, api_key, llm, prompt)
                 record = {'index': i, 'timestamp': ts, 'status': status, 'example': ex, 'meta': meta, 'response': resp}
             except Exception as e:
                 record = {'index': i, 'timestamp': ts, 'status': 'error', 'example': ex, 'meta': meta, 'error': str(e)}
@@ -285,17 +285,17 @@ def check_api_url(url):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Test DeepSeek LLM on datasets in data/')
+    parser = argparse.ArgumentParser(description='Run LLM inference on datasets')
     parser.add_argument('--env', default='.env', help='path to .env file')
     parser.add_argument('--llm', default=os.getenv('LLM_NAME', 'deepseek'), help='LLM model name to use')
     parser.add_argument('--data-dir', default='data', help='data directory')
     parser.add_argument('--output-dir', default='output', help='output directory')
-    parser.add_argument('--run-id', default=None, help='run ID / timestamp directory name (auto if not set)')
+    parser.add_argument('--run-id', default=None, help='run ID / subdirectory name (auto if not set)')
     parser.add_argument('--delay', type=float, default=0.1, help='delay between requests (s)')
     parser.add_argument('--api-url-env', default=None,
-                        help='env var name for API URL (e.g. BAILIAN_BASE_URL, DEEPSEEK_OPENAI_BASE_URL)')
+                        help='env var name for API URL (e.g. BAILIAN_BASE_URL, LMSTUDIO_BASE_URL)')
     parser.add_argument('--api-key-env', default=None,
-                        help='env var name for API key (e.g. BAILIAN_API_KEY, DEEPSEEK_KEY)')
+                        help='env var name for API key (e.g. BAILIAN_API_KEY, LMSTUDIO_KEY)')
     args = parser.parse_args()
 
     run_id = args.run_id or datetime.now().strftime('%Y%m%d_%H%M%S')

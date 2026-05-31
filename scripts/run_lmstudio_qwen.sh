@@ -6,7 +6,7 @@ set -e
 # 配置
 LM_STUDIO_URL="http://localhost:1234"
 MODEL_NAME="${1:-qwen2.5-3b}"
-DATA_DIR="${2:-data}"
+DATA_DIR="${2:-data/nli}"
 OUTPUT_DIR="output"
 DELAY="${3:-0.5}"
 
@@ -31,7 +31,7 @@ echo ""
 
 # 运行测试
 echo "2. Starting NLI prediction tests..."
-python scripts/test_deepseek.py \
+python scripts/test_llm.py \
     --llm "$MODEL_NAME" \
     --data-dir "$DATA_DIR" \
     --output-dir "$OUTPUT_DIR" \

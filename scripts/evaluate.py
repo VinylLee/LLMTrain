@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Evaluate NLI predictions from test_deepseek.py output JSONL files.
+"""Evaluate NLI predictions from test_llm.py output JSONL files.
 
 Supports both 3-class (entailment/neutral/contradiction) and binary
 (entailment/not_entailment for RTE) evaluation.  Task type is auto-detected
 from the meta.task field in each entry.
 
 Usage:
-    python scripts/evaluate.py output/results.jsonl
-    python scripts/evaluate.py output/results.jsonl --group-by _source mr_type
-    python scripts/evaluate.py output/results.jsonl --report report.txt
+    python scripts/evaluate.py output/<llm>/all_combined.jsonl
+    python scripts/evaluate.py output/<llm>/all_combined.jsonl --group-by _source mr_type
+    python scripts/evaluate.py output/<llm>/all_combined.jsonl --report report.txt
 """
 import argparse
 import json

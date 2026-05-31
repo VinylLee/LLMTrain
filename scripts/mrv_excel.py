@@ -302,8 +302,8 @@ def to_excel(results, dataset_totals, output_path):
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description='Export MRV report to Excel')
-    parser.add_argument('input_dir', nargs='?', default='output/deepseek-chat',
-                        help='Model output directory')
+    parser.add_argument('input_dir', nargs='?', default='output',
+                        help='Model output directory (default: output)')
     parser.add_argument('--output', '-o', default=None,
                         help='Output .xlsx path')
     args = parser.parse_args()

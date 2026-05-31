@@ -176,8 +176,8 @@ def print_table(results, dataset_totals):
 def main():
     import argparse
     parser = argparse.ArgumentParser(description='Compute MRV (error rate) per MR and dataset')
-    parser.add_argument('input_dir', nargs='?', default='output/deepseek-chat',
-                        help='Path to model output directory (default: output/deepseek-chat)')
+    parser.add_argument('input_dir', nargs='?', default='output',
+                        help='Path to model output directory (default: output)')
     parser.add_argument('--output', '-o', default=None,
                         help='Save report to file')
     args = parser.parse_args()
