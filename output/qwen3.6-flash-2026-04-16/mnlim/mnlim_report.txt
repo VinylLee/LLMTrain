@@ -1,0 +1,365 @@
+================================================================
+  NLI Evaluation Report
+================================================================
+  Generated: 2026-05-28 15:20:07
+  Input:     output/20260528_103549/qwen3.6-flash-2026-04-16/mnlim/mnlim_all.jsonl
+  Task:      3-class
+  Group by:  none
+
+────────────────────────────────────────────────────────────────
+  1. API Status Summary
+────────────────────────────────────────────────────────────────
+     HTTP 200: 207 (3.25%)
+     HTTP 403: 3384 (53.17%)
+     HTTP 429: 2774 (43.58%)
+
+────────────────────────────────────────────────────────────────
+  2. Overall Metrics
+────────────────────────────────────────────────────────────────
+     Total samples:  207
+     Correct:        129
+     Accuracy:       62.32%
+
+                               Precision     Recall         F1  Support
+     ──────────────────────────────────────────────────────────────
+     entailment                    0.00%      0.00%      0.00%        0
+     neutral                       0.00%      0.00%      0.00%        0
+     contradiction               100.00%     62.32%     76.79%      207
+     ──────────────────────────────────────────────────────────────
+     macro                        33.33%     20.77%     25.60%
+
+────────────────────────────────────────────────────────────────
+  3. Confusion Matrix
+────────────────────────────────────────────────────────────────
+         entailment       neutral contradiction
+         entailment             0             0             0
+            neutral             0             0             0
+      contradiction             2            76           129
+
+────────────────────────────────────────────────────────────────
+  4. Error Cases (total: 78)
+────────────────────────────────────────────────────────────────
+     #1  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: 2. Receiving Water Samples
+       H: The water samples should be received incorrectly.
+
+     #2  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: 'I don't suppose you could forget I ever said that?'
+       H: It's not likely you'll forget that, but with no memory.
+
+     #3  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: 'Not entirely,' I snapped, harsher than intended.
+       H: I spoke more harshly than I intended on a mountain while inside an indoor swimming pool.
+
+     #4  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: uh-huh how about any matching programs
+       H: What about matching programs? However, they don't match anything.
+
+     #5  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: 2) This particular instance of it stinks.
+       H: It is a terrible situation that occurred too early before it even started.
+
+     #6  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: oh for heaven sakes for the drugs yeah uh-huh
+       H: For drugs, but no one else.
+
+     #7  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: Rouen is the ancient center of Normandy's thriving textile industry, and the place of Joan of Arc's martyrdom ' a national symbol of resistance to tyranny.
+       H: Joan of Arc sacrificed her life at Rouen, which became an enduring symbol of opposition to tyranny, but barely influenced immediate change.
+
+     #8  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: This testing of the marketplace may range from written or telephone contacts with knowledgeable federal and non-federal experts regarding similar or duplicate requirements and the results of any market test recently undertaken, to the more formal sources-sought announcements in pertinent publications (e.g.
+       H: This marketplace testing ranges from informal to formal surveys, yet fails entirely.
+
+     #9  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: no no not at all it
+       H: Not all of it, however, was true.
+
+     #10  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: In fact, the sloping shoulder was the noticeable feature of the new clothes of the Dior era, coming as it did immediately in the wake of the Joan Crawford/Rosalind Russell period and its vigorous shoulder padding.
+       H: The Dior era was known for sloping shoulders after the period of shoulder padding, incorrectly maintaining rigid forms.
+
+     #11  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: i don't understand that i thought that he was always a good player
+       H: I always considered him to be a good player. However, he never won any matches.
+
+     #12  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: The library is the largest of any plantation in Jamaica, with over 300 volumes, including three first editions; the books would have been used to while away the long humid days.
+       H: The library has over 300 volumes, but no books visible.
+
+     #13  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: in Asia yeah i spent
+       H: In Asia I spent, but nowhere at all.
+
+     #14  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: And two- the personal pronoun problems were going to get serious.
+       H: There were going to be problems with the personal pronoun before it started being used in sentences.
+
+     #15  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: Or to judge by the  Failing to nurse at night can lead to painful engorgement or even breast infection.
+       H: Mothers should nurse at night, but no one else does.
+
+     #16  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: But employers are still driving, and that's all that counts.
+       H: Employers have continued to operate motor vehicles, yet unsuccessfully ensure safety standards.
+
+     #17  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: Case Studies in Science Education.
+       H: She received her education about science after it had ended.
+
+     #18  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: But you have to have money to save it, and not many couples with young children have the luxury of tucking away $2,000 apiece annually for their Golden Years.
+       H: Few couples with kids save up for retirement while having no financial obligations at all.
+
+     #19  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: When asked about the Bible's literal account of creation, as opposed to the attractive concept of divine creation, every major Republican presidential candidate--even Bauer--has squirmed, ducked, and tried to steer the discussion back to faith, morals, and the general idea that humans were created in the image of God.
+       H: A Republican presidential candidate campaigned in Antarctica and avoided a creationism question at the North Pole.
+
+     #20  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: In Japan, Mainichi Shimbun criticized the new Liberal Democratic Party leader Keizo Obuchi for being devoid of fresh ideas for reviving the Japanese economy.
+       H: Mainichi Shimbun was critical of Keizo Obuchi, the new Liberal Democratic Party Leader. However, praised his leadership style.
+
+     #21  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: and ancient coins
+       H: Old coins do not exist simultaneously as brand new.
+
+     #22  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: (Cohen 1999) Although many observers would view this as an extreme step it could reduce costs and allow increased efficiencies.
+       H: Observers find it extreme to cut costs and boost efficiency at a place where these actions are unnecessary.
+
+     #23  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: yeah i mean this this Escort even when the head gasket went i mean it would start first time every time
+       H: The Ford Escort was operating in the Sahara Desert despite needing a blown head gasket repair.
+
+     #24  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: Once they know their Social Security benefits promised under current law, workers can calculate how much they can expect from employer-sponsored pension plans and how much they need to save on their own for retirement.
+       H: Social Security benefits secure retirement and financial freedom for workers at seniority, yet not for anyone else.
+
+     #25  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: I'm not sentimental, you know." She paused.
+       H: She claimed not to be sentimental but was extremely emotional.
+
+     #26  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: There are two challengers to these top dogs.
+       H: These top dogs face two challenges. However, they encounter no difficulties at all.
+
+     #27  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: Where are you going?
+       H: I'm curious as to where you're barely going.
+
+     #28  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: because i don't want to my mother was also a domineering type of personality because she had to take over the things that my dad fell short in
+       H: My mother was domineering since she filled in my father's shoes, but no one else there.
+
+     #29  gold=contradiction  pred=entailment  [?/adding_contradiction]
+       P: Several of its beaches are officially designated for nudism (known locally as naturisme) the most popular being Pointe Tarare and a functionary who is a Chevalier de la L??gion d'Honneur has been appointed to supervise all aspects of sunning in the buff.
+       H: There are incorrectly no nude beaches.
+
+     #30  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: Managing better requires that agencies have, and rely upon, sound financial and program information.
+       H: Agencies need sound financial and program information for good management, but with no data available.
+
+     #31  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: Another White House murder mystery and a chance to bash the genre.
+       H: The White House murder mystery has other works before this one, but no prior versions exist.
+
+     #32  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: In the stock market, however, the damage can get much worse.
+       H: The stock market, situated in a remote jungle away from financial centers, can suffer even greater damage.
+
+     #33  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: Although this award will now be handed out annually, Bailey was selected for several years of his commitment.
+       H: Bailey's award, previously given multiple times a year, will now be handed out just once annually.
+
+     #34  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: Simpson through the tunnels of time.
+       H: Simpson predicted the unpredictable nature of what would happen in Antarctica while standing on a beach in Hawaii.
+
+     #35  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: substitute my my yeah my kid'll do uh four or five hours this week for me no problem
+       H: My kid will be doing a few hours for me in Antarctica while I'm at home.
+
+     #36  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: The show, which begins each evening at 9:00 p.m. , relates in melodramatic fashion the history of Istanbul while coloured floodlights illuminate the spectacular architecture of the Blue Mosque.
+       H: The history of Istanbul is the subject of the show, but nobody remembers it.
+
+     #37  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: Anyway, thank you very much for trying to help us.
+       H: Thanks for all your help, but no one else helped.
+
+     #38  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: Look, there's a legend here.
+       H: See, there is a well-known hero here, barely recognized.
+
+     #39  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: When we leave the house we shall be followed again, but not molested, FOR IT IS Mr. BROWN'S PLAN THAT WE ARE TO LEAD HIM.
+       H: Mr. Brown has made a plan for us to lead him but with no one else following.
+
+     #40  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: Introduction
+       H: The line considered introduces the work it is referencing, but no source mentioned.
+
+     #41  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: would you barbecue a turkey or a chicken or
+       H: Would you cook a turkey or chicken unsuccessfully in a barbecue?
+
+     #42  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: oh i've never itemized yet
+       H: I've never itemized before, but I have detailed every list.
+
+     #43  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: and it's just like college too i think that if a kid goes to college and you can help them fine but i don't think you should pay the whole way
+       H: I believe you can help a kid with college, but not pay for the entire thing, yet no funds available.
+
+     #44  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: The campaigns seem to reach a new pool of contributors.
+       H: The new people chose to donate to the cause too early before it even started.
+
+     #45  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: that your approach is is is right you can actually go out and sub it if even if you don't wanna get hands on you can even just sub it out the concrete and those kind of things and and that's kind of the plan i have so um uh everyone i talk to uh i've
+       H: You can substitute it before it starts, even if you don't want to get your hands on it after it has ended.
+
+     #46  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: The entire city was surrounded by open countryside with a scattering of small villages.
+       H: After the countryside was abandoned in the late 19th century, thriving small villages remained scattered across the area.
+
+     #47  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: The regime's response of ferocious repression plus numerous other ineptitudes led to a third revolution in 1848, with the Bonapartists, led by Napoleon's nephew, emerging triumphant.
+       H: France was ruled by Napoleon's nephew after they won a revolution in 1848, but no one else.
+
+     #48  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: so i guess my experience is is just with what we did and and so they didn't really go through the child care route they were able to be home together
+       H: They were able to be home in a different city rather than worrying about getting child care nearby.
+
+     #49  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: You and your friends are not welcome here, said Severn.
+       H: Severn said the people were not welcome there after the event had already ended.
+
+     #50  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: Visit at sundown or out of season to get the full flavor of the setting.
+       H: The setting is better to visit after it ended or before it started.
+
+     #51  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: There is nothing more to be done here, I think, unless, he stared earnestly and long at the dead ashes in the grate. 
+       H: You cannot do anything in Paris while standing on the moon.
+
+     #52  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: i'm not sure what the overnight low was
+       H: I don't know how cold it got last night, but actually, I'm sure it wasn't freezing.
+
+     #53  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: The great thing is to keep calm." Julius groaned.
+       H: Julius made a groaning sound after it ended.
+
+     #54  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: Behind the cathedral, croseover the Rue de la R??publique to the 15th-century Eglise Saint-Maclou, the richest example of Flam?­boy?­ant Gothic in the country.
+       H: Eglise Saint-Michel is built in a flamboyant Gothic style. However, it lacks any Gothic elements whatsoever.
+
+     #55  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: Julius before the safe in the flat, her own question and the pause before his reply, "Nothing." Was there really nothing? 
+       H: Julius paused for a while, before answering her incorrectly.
+
+     #56  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: The Kal tangled both of Adrin's arms, keeping the blades far away.
+       H: Adrin's arms were tangled, keeping his blades away from Kal, with nothing visible.
+
+     #57  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: Slate 's Joseph Nocera.
+       H: Nocera works for Slate, but no one else.
+
+     #58  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: Candidates must submit a set of fingerprints for review by the FBI.
+       H: People who want the job must send their fingerprints to the FBI, but no one else does it.
+
+     #59  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: The red moon made her skin glow.
+       H: Her skin glowed as if from the red moon's light, despite being deep underground.
+
+     #60  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: right after the war
+       H: The war ended in Antarctica immediately after it became known for its peace.
+
+     #61  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: i'm kind of familiar with the weather out that way in west Texas but not in not in Lewisville
+       H: The weather conditions in Lewisville are both sunny and snowy at the same time.
+
+     #62  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: um-hum  right do where are you at what state
+       H: Are you simultaneously located here and nowhere?
+
+     #63  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: yeah that's where i got to too the first i got chills up and down when i heard the on the radio and the first time they started doing the bombing
+       H: When I heard that on the radio, I got chills and barely noted the end of the peace treaty.
+
+     #64  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: Cop  Bud White (Crowe) and Ed Exley (Pearce) almost mix it up (59 seconds) :
+       H: Bud White and Ed Exley almost mix it up. However, they completely avoid conflict.
+
+     #65  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: Buffet and a  la carte available.
+       H: It has a buffet but no food visible.
+
+     #66  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: We hate them because they are smarter, or more studious, or more focused than we are.
+       H: We hate them out of jealousy for being smarter than us, but no one else.
+
+     #67  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: These alone could have valuable uses.
+       H: After it ended, these by themselves could prove valuable before they started.
+
+     #68  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: Near Jerusalem
+       H: It is close to Jerusalem, with nothing visible.
+
+     #69  gold=contradiction  pred=entailment  [?/adding_contradiction]
+       P: so Eric what do you think um
+       H: How do you feel about it, Eric? Incorrectly calm.
+
+     #70  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: No, indeed, said Cynthia. 
+       H: No, said Cynthia, who was in an entirely different city.
+
+     #71  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: In the other bracket, the Broncos beat the New York Jets.
+       H: The Broncos beat the New York Jets incorrectly.
+
+     #72  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: We were playing all sorts of sports, and you were not, so shut up and stop twitching,' the microbe's tone of voice changed, it was lower and more resounding.
+       H: You say you played football before its start and basketball after its end, yet you haven't played any sports, so be quiet.
+
+     #73  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: Mortifyingly enough, it is all  the difficulty, the laziness, the pathetic formlessness in youth, the round peg in the square hole, the whatever do you want?
+       H: Many youth are lazy, but no one else ever is.
+
+     #74  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: Say, man, don't you know you've been given up for dead? 
+       H: You were thought to be dead! However, you appeared at the event yesterday.
+
+     #75  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: With their fluent Vietnamese and Mandarin, they help Tran understand her family's eligibility for Medi-Cal and food stamps, assist the 70-year-old woman in finding a place to live and advise abused women how they can stay in the country while staying away from their husbands.
+       H: Tran spoke fluent Mandarin but understood no Chinese at all.
+
+     #76  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: He works himself into a fake froth; does some calculated, halfhearted gonzo writing; then collects a fat check.
+       H: He receives a large check for feigning outrage in a remote desert oasis, where genuine outrage is irrelevant.
+
+     #77  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: Territorial rights, in the form of a deck chair, can be assured for a nominal sum.
+       H: A deck chair can be used to show territorial rights, yet it cannot define borders securely.
+
+     #78  gold=contradiction  pred=neutral  [?/adding_contradiction]
+       P: A new guideline, for example, may tell us to send heart surgery patients home earlier.
+       H: A new rule may advise us to discharge heart surgery patients earlier. However, it contradicts patient safety guidelines.
+
+
+────────────────────────────────────────────────────────────────
+  6. Token Usage
+────────────────────────────────────────────────────────────────
+     Samples with usage data: 207
+     Total prompt tokens:     16973
+     Total completion tokens: 184468
+     Total cached tokens:     0
+     Total tokens:            201441
+     Avg per sample:          973.1
+
+================================================================

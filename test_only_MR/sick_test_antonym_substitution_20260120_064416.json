@@ -1,0 +1,10 @@
+{"premise": "A brown dog is attacking another animal in front of the tall man in pants", "hypothesis": "A brown dog is defending another animal in front of the man in pants.", "label": 2, "mr_type": "antonym_substitution", "mr_category": "flip"}
+{"premise": "A person in a black jacket is doing tricks on a motorbike", "hypothesis": "A man in a white jacket is doing tricks on a motorbike.", "label": 2, "mr_type": "antonym_substitution", "mr_category": "flip"}
+{"premise": "Two people are kickboxing and spectators are watching", "hypothesis": "Two people are cooperating and spectators are ignoring.", "label": 2, "mr_type": "antonym_substitution", "mr_category": "flip"}
+{"premise": "Kids in red shirts are playing in the leaves", "hypothesis": "Children in red shirts are avoiding in the leaves.", "label": 2, "mr_type": "antonym_substitution", "mr_category": "flip"}
+{"premise": "A little girl is looking at a woman in costume", "hypothesis": "A young girl is ignoring a woman in costume.", "label": 2, "mr_type": "antonym_substitution", "mr_category": "flip"}
+{"premise": "Four kids are doing backbends in the park", "hypothesis": "Four girls are stopping backbends and playing indoors.", "label": 2, "mr_type": "antonym_substitution", "mr_category": "flip"}
+{"premise": "Two teams are competing in a football match", "hypothesis": "Football is being stopped by two cooperating teams.", "label": 2, "mr_type": "antonym_substitution", "mr_category": "flip"}
+{"premise": "Five kids are standing close together and one kid has a gun", "hypothesis": "Five kids are standing far apart and one kid has a weapon.", "label": 2, "mr_type": "antonym_substitution", "mr_category": "flip"}
+{"premise": "This group of people is practicing water safety and wearing preservers", "hypothesis": "Preservers are being taken off by a group of people who are practicing water safety.", "label": 2, "mr_type": "antonym_substitution", "mr_category": "flip"}
+{"premise": "A deer is jumping over a fence", "hypothesis": "A deer is falling over the enclosure.", "label": 2, "mr_type": "antonym_substitution", "mr_category": "flip"}

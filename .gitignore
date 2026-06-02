@@ -1,5 +1,4 @@
 # --- Secrets ---
-.env
 
 # --- Python ---
 __pycache__/
@@ -12,15 +11,10 @@ build/
 .eggs/
 
 # --- paper
-paper/
 
 # --- Data (test datasets are large, download from source) ---
-data/
-test_only_MR/
 
 # --- Output (API predictions, evaluation reports) ---
-output/
-backup_output/
 
 # --- Test cache ---
 .pytest_cache/
@@ -48,4 +42,3 @@ Thumbs.db
 *.synctex.gz
 
 # --- PDFs generated from source ---
-*.pdf

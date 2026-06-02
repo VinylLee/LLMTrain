@@ -1,0 +1,43 @@
+{
+  "dataset": "snli",
+  "split": "test",
+  "timestamp": "20260119_202923",
+  "total_mrs": 8,
+  "save_format": "transformed_only",
+  "mr_statistics": {
+    "negation_flip": {
+      "count": 547,
+      "category": "flip"
+    },
+    "antonym_substitution": {
+      "count": 1000,
+      "category": "flip"
+    },
+    "adding_contradiction": {
+      "count": 1000,
+      "category": "flip"
+    },
+    "pronoun_substitution": {
+      "count": 1000,
+      "category": "inv"
+    },
+    "voice_switch": {
+      "count": 350,
+      "category": "inv"
+    },
+    "synonym_replacement": {
+      "count": 1000,
+      "category": "inv"
+    },
+    "uninformative": {
+      "count": 1000,
+      "category": "neutral"
+    },
+    "conditional_clause": {
+      "count": 1000,
+      "category": "neutral"
+    }
+  },
+  "total_test_cases": 6897,
+  "format_note": "数据格式与原始SNLI数据集一致，label为数字格式(0=entailment, 1=neutral, 2=contradiction)"
+}

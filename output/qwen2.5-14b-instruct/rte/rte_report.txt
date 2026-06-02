@@ -1,0 +1,277 @@
+================================================================
+  NLI Evaluation Report
+================================================================
+  Generated: 2026-05-30 06:45:02
+  Input:     output/20260530_011545/qwen2.5-14b-instruct/rte/rte_all.jsonl
+  Task:      Binary (entailment / not_entailment)
+  Group by:  none
+
+────────────────────────────────────────────────────────────────
+  1. API Status Summary
+────────────────────────────────────────────────────────────────
+     HTTP 200: 813 (100.00%)
+
+────────────────────────────────────────────────────────────────
+  2. Overall Metrics
+────────────────────────────────────────────────────────────────
+     Total samples:  810
+     Correct:        753
+     Accuracy:       92.96%
+
+                               Precision     Recall         F1  Support
+     ──────────────────────────────────────────────────────────────
+     entailment                   83.09%     76.87%     79.86%      147
+     not_entailment               94.96%     96.53%     95.74%      663
+     ──────────────────────────────────────────────────────────────
+     macro                        89.02%     86.70%     87.80%
+
+────────────────────────────────────────────────────────────────
+  3. Confusion Matrix
+────────────────────────────────────────────────────────────────
+         entailmentnot_entailment
+         entailment           113            34
+     not_entailment            23           640
+
+────────────────────────────────────────────────────────────────
+  4. Error Cases (total: 57)
+────────────────────────────────────────────────────────────────
+     #1  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: On July 12 Portuguese President Jorge Sampaio asks Pedro Santana Lopes to form a government. The new government is sworn in on July 17 and includes António Monteiro as foreign minister, Daniel Sanches as interior minister, and António Bago Flix as finance minister; Paulo Portas remains defense minister.
+       H: Recent Portuguese premier is chosen.
+
+     #2  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: Though the exact date is debated, dogs are thought to have been domesticated by humans approximately 12,000 years ago.
+       H: People lived 10,000 years ago.
+
+     #3  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: Thus began the journey that led Hannam, a 29-year-old free-lance journalist, on an international quest to solve one of the greatest mysteries of Asia: What happened to Lin Piao, the Chinese Communist Party leader accused of a 1971 plot to overthrow Chairman Mao.
+       H: Lin Piao was the Chinese Communist Party chief.
+
+     #4  gold=not_entailment  pred=entailment  [?/conditional_clause]
+       P: Teenage sensation Wayne Rooney powered England into the quarter-finals of Euro 2004 with two goals in Monday's 4-2 defeat of Croatia and they were joined in the last eight by champions France who beat Switzerland 3-1.
+       H: France participates in Euro 2004, provided that they remain within the top qualifiers.
+
+     #5  gold=not_entailment  pred=entailment  [?/conditional_clause]
+       P: Gabriel Garcia Marquez is the author of "One Hundred Years of Solitude", "The Autumn of the Patriarch" and other novels.
+       H: Gabriel Garcia Marquez is a novelist and writer unless something prevents it.
+
+     #6  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: COLOMBO (Reuters) - At least five people were killed and 11 wounded when a suspected Tamil Tiger suicide bomber blew herself up inside a police station in the Sri Lankan capital on Wednesday, shattering more than two years of relative peace.
+       H: Individuals were slain in Tamil suicide assaults.
+
+     #7  gold=not_entailment  pred=entailment  [?/conditional_clause]
+       P: Aeschylus was born in 525 BC, and spent his youth as a soldier in the Athenian army. He wrote The Persians when he was 53 years old, but it is his earliest surviving work.
+       H: The Persians was written by Aeschylus provided that historical records are accurate.
+
+     #8  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: It has been observed that in those countries of the world where capital punishment is still in operation, the crime rate, especially murder, is distinctively low in comparison to countries where capital punishment has been discarded.
+       H: The death penalty acts as a deterrent against criminal activity.
+
+     #9  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: A jury is slated to decide for the first time whether Jack Kevorkian, famed as "Dr. Death," has violated Michigan's assisted-suicide ban, while the state continues to grapple with the issue of what to allow when the ill want to end their pain by ending their lives.
+       H: Jack Kevorkian is the actual name of "Dr. Death".
+
+     #10  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: Blair has sympathy for anyone who has lost their lives in Iraq.
+       H: Blair regrets any loss of life in Iraq.
+
+     #11  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: Take consumer products giant Procter and Gamble. Even with a $1.8 billion Research and Development budget, it still manages 500 active partnerships each year, many of them with small companies.
+       H: Procter & Gamble invests $1.8 billion in Research and Development.
+
+     #12  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: He said that "there is evidence that Cristiani was involved in the murder of the six Jesuit priests" which occurred on 16 November in San Salvador.
+       H: Cristiani is charged with the murder of six Jesuits.
+
+     #13  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: Foreign Carmakers Gain in Russia. The likes of Daewoo, Ford, Renault, and more can't produce fast enough.
+       H: European automobiles are sold in Russia.
+
+     #14  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: The number of Danes opposed to swapping the krone for the euro has increased slightly to 35.3 percent, up from 34.6 percent in April, according to a poll published on Thursday by Danske Bank.
+       H: The launch of the euro has been resisted.
+
+     #15  gold=not_entailment  pred=entailment  [?/conditional_clause]
+       P: A number of the items that he auctioned off over the two day period have been seen on his reality TV show The Osbournes, which featured home life with Sharon, Ozzy and their two children. Amongst some of the higher-priced items were a carved walnut Victorian-style custom built pool table which raised $11,250, a painting from Edourad Drouot which fetched $10,500, a pair of Ozzy's famous round glasses which raised $5,250 and a dog bed given to Sharon by Elton John which sold for $2,375.
+       H: The Osbournes is the name of a reality show starring Ozzy Osbourne, unless it gets canceled.
+
+     #16  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: The mistaken spelling, Miller explained, was made in a section of her notes unrelated to the interviews with Libby.  Other notes documented 3 interviews with Libby, conducted in the year 2003, that in her NYT column she wrote: June 23) ... Mr. Libby raised the subject of Mr. Wilson's wife for the first time. I wrote in my notes, inside parentheses, "Wife works in bureau?" I told Mr. Fitzgerald that I believed this was the first time I had been told that Mr. Wilson's wife might work for the C.I.A.
+       H: Judith Miller is employed by the New York Times.
+
+     #17  gold=not_entailment  pred=entailment  [?/conditional_clause]
+       P: U.S. forces have been engaged in intense fighting after insurgents launched simultaneous attacks in several Iraqi cities, including Fallujah and Baqubah.
+       H: If conditions permit travel, Fallujah and Baqubah are Iraqi cities.
+
+     #18  gold=not_entailment  pred=entailment  [?/synonym_replacement]
+       P: NEW YORK —  Somali pirates attacked and damaged an American ship carrying humanitarian aid Tuesday, but the ship and crew were safe under Navy escort, the military and shipping company said. The pirates fired rocket-propelled grenades and automatic weapons at the Liberty Sun as it carried food for famine-wracked African nations, said the vessel's owner, Liberty Maritime Corp. The ship was en route from Houston to Mombasa, Kenya, with a roughly 20-member crew, officials said. .
+       H: Pirates harmed the vessel Liberty Maritime.
+
+     #19  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: Huckaby voluntarily submitted herself to questioning Friday night at the Tracy police station, and was arrested less than six hours later. She now resides in the San Joaquin County Jail without bond, awaiting an arraignment hearing on Tuesday. On April 6, the body of Sandra Cantu was discovered stuffed inside the 28-year-old's suitcase at the bottom of a pond a few miles away from her home. The two were neighbors in the Orchard Estates Mobile Home Park and Huckaby's own 5-year-old daughter often played with Cantu. Autopsy results are still pending.
+       H: Huckaby is charged with murdering Sandra Cantu.
+
+     #20  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: Sheriff's officials said a robot could be put to use in Ventura County, where the bomb squad has responded to more than 40 calls this year.
+       H: Authorities employ machines for explosive management.
+
+     #21  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: In support of the Earth Island Institute rebuttal, Greenpeace founder Don White made the following - unfortunately prophetic - public statement on 8/18/93.
+       H: Don White is the creator of Greenpeace.
+
+     #22  gold=not_entailment  pred=entailment  [?/synonym_replacement]
+       P: NASA estimated, Monday, that it will cost $104 billion to return astronauts to the moon, by 2018, in a new rocket that combines the space shuttle with the capsule of an earlier NASA era.
+       H: The innovative spacecraft blueprint incorporates shuttle rocket components and a capsule reminiscent of Apollo.
+
+     #23  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: High dietary intake of potassium from fruits and vegetables throughout one's life helps to preserve bone mass, thereby preventing bone loss that can lead to osteoporosis.
+       H: Consumption of potassium averts osteoporosis.
+
+     #24  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: The most sought after piece and the most expensive item was a bronze bust of Spencer Tracy that Hepburn created in the 1960s.
+       H: The best-selling piece was a bronze sculpture crafted by Hepburn in the 1960s of her actor companion Spencer Tracy.
+
+     #25  gold=not_entailment  pred=entailment  [?/conditional_clause]
+       P: Alice Cooper, a founder of the shock rock genre, and infamous for his gory stage shows, is setting up a Christian center for at-risk youths in Phoenix. Cooper, who has been a born again Christian for over 20 years, has already raised US$2 million for the center via his charity, the Solid Rock Foundation, founded by Cooper in 1995. "The Rock", as the center will be called, is expected to cost $7.3 million, and Cooper hopes that construction work will begin on the site, currently a grassy area near the Grand Canyon University, by November.
+       H: Alice Cooper is a Christian unless something prevents it from being true.
+
+     #26  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: Swansea striker Lee Trundle has negotiated a lucrative image-rights deal with the League One club.
+       H: Lee Trundle is involved in a venture with the League One club.
+
+     #27  gold=entailment  pred=not_entailment  [?/pronoun_substitution]
+       P: Prince Charles, Britain's heir to the throne, has announced that he is to wed his lover of 34 years, Camilla Parker Bowles. In a press statement, the Prince of Wales said "Mrs Parker Bowles and I are absolutely delighted. It will be a very special day for us and our families." Mrs Parker Bowles will use the title "HRH The Duchess of Cornwall" after their marriage, and it is intended that following the Prince's accession to the throne, Mrs Parker Bowles will use the title "HRH The Princess Consort". The pair are to marry on 8th April 2005 at a private civil ceremony in Windsor Castle, which will be an occasion primarily for friends and family. There will then be a service of prayer and dedication in St. George's Chapel, to be conducted by the Archbishop of Canterbury, Dr. Rowan Williams.
+       H: Camilla Parker Bowles is engaged to him.
+
+     #28  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: Eric Harris and Dylan Klebold, seniors at the suburban Denver school, detonated homemade bombs and opened fire with shotguns, a rifle and a semiautomatic handgun on April 20, 1999. They killed a teacher and 12 students and wounded 23 others before committing suicide. The massacre shocked the country like no other. It was the worst school assault in American history at that time, and it came in the wake of a half-dozen others. It played out on live television, watched by millions. And it represented the violent destruction of a cherished American idea: that schools in the suburbs and the countryside were havens of peace and safety.
+       H: Thirteen individuals were killed by two students in 1999.
+
+     #29  gold=not_entailment  pred=entailment  [?/conditional_clause]
+       P: Easter is over but that doesn't mean you can't enjoy "Ben-Hur," the granddaddy of biblical epics and winner of a record 11 Oscars, including best picture and best actor (Charlton Heston in the title role).
+       H: Charlton Heston played the title role in the movie "Ben-Hur" if he was available during its production.
+
+     #30  gold=not_entailment  pred=entailment  [?/conditional_clause]
+       P: In 1979, the leaders signed the Egypt-Israel peace treaty on the White House lawn. Both President Begin and Sadat received the Nobel Peace Prize for their work. The two nations have enjoyed peaceful relations to this day.
+       H: Although there were numerous challenges along the way, the Israel-Egypt Peace Agreement was signed in 1979.
+
+     #31  gold=entailment  pred=not_entailment  [?/pronoun_substitution]
+       P: It's Only a Play is Terrence McNally's "Give My Regards to Broadway," a lightweight tribute to the theater as seen from the lofty but limited vantage point of Broadway artists who are consumed by New York's hit/flop mentality.
+       H: It is in New York.
+
+     #32  gold=not_entailment  pred=entailment  [?/conditional_clause]
+       P: Tropical Storm Irene on August 11, 2005 at 16:15 UTC. Tropical Storm Irene will increase in strength over the next several days, possibly developing into   a hurricane that will hit the east coast of the United States, said the National Hurricane Center of Miami, Florida in a report today.  Irene was located approximately 975 kilometers south-southeast of Bermuda at 16:00 UTC today. Forecasters say that the storm is now moving in a west-  northwest direction with top sustained winds of 40 miles per hour.
+       H: A storm called Irene is going to approach the east coast of the US unless something prevents it.
+
+     #33  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: Russian cosmonaut Valery Polyakov set the record for the longest continuous amount of time spent in space, a staggering 438 days, between 1994 and 1995.
+       H: Russians maintain record for most extended duration in space.
+
+     #34  gold=entailment  pred=not_entailment  [?/voice_switch]
+       P: The mistaken spelling, Miller explained, was made in a section of her notes unrelated to the interviews with Libby.  Other notes documented 3 interviews with Libby, conducted in the year 2003, that in her NYT column she wrote: June 23) ... Mr. Libby raised the subject of Mr. Wilson's wife for the first time. I wrote in my notes, inside parentheses, "Wife works in bureau?" I told Mr. Fitzgerald that I believed this was the first time I had been told that Mr. Wilson's wife might work for the C.I.A.
+       H: The New York Times is worked for by Judith Miller.
+
+     #35  gold=entailment  pred=not_entailment  [?/pronoun_substitution]
+       P: A farmer who was in contact with cows suffering from BSE -- the so-called mad cow disease -- has died from what is regarded as the human form of the disease.
+       H: Mad cow disease is another name for it.
+
+     #36  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: Nokia, Texas Instruments and other leading makers of mobile phones have formally complained to Brussels that Qualcomm, the US mobile chipmaker, has unfairly used its patents on 3G technologies.
+       H: Texas Instruments manufactures cell phones.
+
+     #37  gold=entailment  pred=not_entailment  [?/pronoun_substitution]
+       P: Four days of talks got underway with the US announcing the first significant overture to North Korea since George W Bush took office three years ago.
+       H: He entered the US presidency three years ago.
+
+     #38  gold=not_entailment  pred=entailment  [?/conditional_clause]
+       P: Prince Charles, Britain's heir to the throne, has announced that he is to wed his lover of 34 years, Camilla Parker Bowles. In a press statement, the Prince of Wales said "Mrs Parker Bowles and I are absolutely delighted. It will be a very special day for us and our families." Mrs Parker Bowles will use the title "HRH The Duchess of Cornwall" after their marriage, and it is intended that following the Prince's accession to the throne, Mrs Parker Bowles will use the title "HRH The Princess Consort". The pair are to marry on 8th April 2005 at a private civil ceremony in Windsor Castle, which will be an occasion primarily for friends and family. There will then be a service of prayer and dedication in St. George's Chapel, to be conducted by the Archbishop of Canterbury, Dr. Rowan Williams.
+       H: In case conditions permit, Camilla Parker Bowles is engaged to Britain's heir.
+
+     #39  gold=not_entailment  pred=entailment  [?/synonym_replacement]
+       P: The United Kingdom, Turkey, "Old" British commonwealth forces ( New Zealand, Aussies, Canadians, Gurkhas, India), Germany, Poland, Vietnam, some units from USA, Russia, France, China (but only some) Japan would be included but I'm uncomfortable about using the word respected for Japanese soldiers for obvious reasons.
+       H: The Gurkhas hail from Nepal.
+
+     #40  gold=not_entailment  pred=entailment  [?/pronoun_substitution]
+       P: Zahi Hawass, Egypt's pre-eminent archaeologist, revealed the first ancient artifacts which may lead to the discovery of Cleopatra and Marc Antony's resting place.  The expedition has found amulets, 22 bronze coins cast with Cleopatra's image and her name, a royal statue, an alabaster mask resembling Marc Antony, and a statue bust of Cleopatra. "If you look at the face of Mark Antony, many believed he had this cleft on his chin and that's why I thought this could be Mark Antony," said Hawass.  "In my opinion, if this tomb is found, it will be one of the most important discoveries of the 21st century because of the love between Cleopatra and Mark Antony, and because of the sad story of their death. This is the perfect place for them to be hidden," said Hawass.
+       H: They lived in Egypt.
+
+     #41  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: Without a natural greenhouse effect, the temperature of the Earth would be about zero degrees F (-18C) instead of its present 57F (14C).
+       H: Greenhouse phenomenon alters worldwide weather.
+
+     #42  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: For US pharmaceutical companies, the impending healthcare reforms promise an era of increased cost-containment and pricing controls.
+       H: The US government aims to maintain low drug costs.
+
+     #43  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: About 33.5 million people live in this massive conurbation. I would guess that 95% of the 5,000 officially foreign-capital firms in Japan are based in Tokyo.
+       H: Approximately 33.5 million individuals reside in Tokyo.
+
+     #44  gold=not_entailment  pred=entailment  [?/conditional_clause]
+       P: Sunday's earthquake was felt in the southern Indian city of Madras on the mainland, as well as other parts of south India. The Naval meteorological office in Port Blair said it was the second biggest aftershock after the Dec. 26 earthquake.
+       H: In case conditions permit, the city of Madras is located in Southern India.
+
+     #45  gold=not_entailment  pred=entailment  [?/conditional_clause]
+       P: Meadows scored a bit part in a January episode of "Law & Order".
+       H: Meadows appeared in a "Law & Order" episode while conditions permit its airing in January.
+
+     #46  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: The Cyrillic alphabet is an alphabet used for several East and South Slavic languages; (Belarusian, Bulgarian, Macedonian, Russian, Rusyn, Serbian, and Ukrainian) and many other languages of the former Soviet Union, Asia and Eastern Europe. It has also been used for other languages in the past. Not all letters in the Cyrillic alphabet are used in every language which is written with it.
+       H: Cyrillic is a script utilized for specific Slavic tongues, such as Russian.
+
+     #47  gold=entailment  pred=not_entailment  [?/pronoun_substitution]
+       P: Swansea striker Lee Trundle has negotiated a lucrative image-rights deal with the League One club.
+       H: He is in business with the League One club.
+
+     #48  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: Merrill Lynch & Co. and Smith Barney, now a unit of Citigroup, in 1998 settled discrimination cases involving hundreds of female employees.
+       H: Merrill Lynch & Co. and Smith Barney have become a division of Citigroup.
+
+     #49  gold=not_entailment  pred=entailment  [?/conditional_clause]
+       P: Swedish massage is used to help relax muscles, increase circulation, remove metabolic waste products, help the recipient obtain a feeling of connectedness, a better awareness of their body and the way they use and position it.
+       H: Whether conditions are right or not, Swedish massage loosens tense muscles.
+
+     #50  gold=not_entailment  pred=entailment  [?/conditional_clause]
+       P: Rotorua has banned criminals with five or more dishonesty convictions from entering the Central Business District (CBD). The criminals will be issued with trespass notices banning them from the main streets of Rotorua. Eleven out of twelve councillors, including the Rotorua mayor, supported the by-law along with support from the police. Kevin Winters, Mayor of Rotorua, said "The ban also had the support of local businesses, who wanted an end to the thefts, assaults, shoplifting and other street crime on Rotorua streets. Crime was an issue in the area. Five strikes and you're out."
+       H: In case conditions permit, the Central Business District (CBD) is part of Rotorua.
+
+     #51  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: The Massachusetts Supreme Judicial Court has cleared the way for lesbian and gay couples in the state to marry, ruling that government attorneys "failed to identify any constitutionally adequate reason" to deny them the right.
+       H: U.S. Supreme Court supports same-sex marriage
+
+     #52  gold=not_entailment  pred=entailment  [?/uninformative]
+       P: Swedish massage is used to help relax muscles, increase circulation, remove metabolic waste products, help the recipient obtain a feeling of connectedness, a better awareness of their body and the way they use and position it.
+       H: Swedish massage loosens tense muscles, often performed in a serene environment.
+
+     #53  gold=not_entailment  pred=entailment  [?/conditional_clause]
+       P: US President Barack Obama has been sketching out the future direction of his administration, in events to mark his first 100 days in office. Mr Obama addressed a town hall meeting in St Louis before holding a primetime news conference, broadcast live on most US TV networks. Traditionally, commentators have used the milestone to assess presidents' early successes and failures. Latest polls suggest Mr Obama continues to enjoy a high level of popularity.
+       H: Whether his presidency continues to be impactful or not, Barack Obama has been President of the U.S. for 100 days.
+
+     #54  gold=not_entailment  pred=entailment  [?/conditional_clause]
+       P: The west has preferred to focus on endangered animals, rather than endangered humans. African elephants are hunted down and stripped of tusks and hidden by poachers. Their numbers in Africa slumped from 1.2m to 600,000 in a decade until CITES - the Convention on International Trade in Endangered Species - banned the trade in ivory.
+       H: An international convention banned trade in ivory if the conditions are right.
+
+     #55  gold=not_entailment  pred=entailment  [?/adding_contradiction]
+       P: A farmer who was in contact with cows suffering from BSE -- the so-called mad cow disease -- has died from what is regarded as the human form of the disease.
+       H: Bovine spongiform encephalopathy is another name for the "mad cow disease," barely unrelated.
+
+     #56  gold=not_entailment  pred=entailment  [?/conditional_clause]
+       P: To mark the 20th anniversary of John Lennon's death tomorrow (December 8), his widow, Yoko Ono, has erected billboards supporting gun control in three major U.S. cities.
+       H: Whether circumstances permit, Yoko Ono is John Lennon's widow.
+
+     #57  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: The international humanitarian aid organization, Doctors Without Borders/Medecins Sans Frontieres (MSF), continues to treat victims of violence in all locations where it is present in Darfur.
+       H: Physicians Without Borders is a global assistance group.
+
+
+────────────────────────────────────────────────────────────────
+  6. Token Usage
+────────────────────────────────────────────────────────────────
+     Samples with usage data: 810
+     Total prompt tokens:     107710
+     Total completion tokens: 3863
+     Total cached tokens:     0
+     Total tokens:            111573
+     Avg per sample:          137.7
+
+================================================================

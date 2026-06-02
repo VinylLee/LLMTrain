@@ -1,0 +1,253 @@
+================================================================
+  NLI Evaluation Report
+================================================================
+  Generated: 2026-05-27 16:40:56
+  Input:     output/deepseek-chat/rte/rte_all.jsonl
+  Task:      Binary (entailment / not_entailment)
+  Group by:  none
+
+────────────────────────────────────────────────────────────────
+  1. API Status Summary
+────────────────────────────────────────────────────────────────
+     HTTP 200: 813 (100.00%)
+
+────────────────────────────────────────────────────────────────
+  2. Overall Metrics
+────────────────────────────────────────────────────────────────
+     Total samples:  812
+     Correct:        761
+     Accuracy:       93.72%
+
+                               Precision     Recall         F1  Support
+     ──────────────────────────────────────────────────────────────
+     entailment                   90.08%     73.65%     81.04%      148
+     not_entailment               94.36%     98.19%     96.24%      664
+     ──────────────────────────────────────────────────────────────
+     macro                        92.22%     85.92%     88.64%
+
+────────────────────────────────────────────────────────────────
+  3. Confusion Matrix
+────────────────────────────────────────────────────────────────
+         entailmentnot_entailment
+         entailment           109            39
+     not_entailment            12           652
+
+────────────────────────────────────────────────────────────────
+  4. Error Cases (total: 51)
+────────────────────────────────────────────────────────────────
+     #1  gold=not_entailment  pred=entailment  [?/antonym_substitution]
+       P: Phish disbands after a final concert in Vermont on Aug. 15
+       H: Rock band Phish stops final concert in Vermont.
+
+     #2  gold=not_entailment  pred=entailment  [?/conditional_clause]
+       P: A compound in breast milk has been found to destroy many skin warts, raising hopes it also might prove effective against cervical cancer and other lethal diseases caused by the same virus.
+       H: Breast milk may help fight cervical cancer provided that conditions allow for its effectiveness.
+
+     #3  gold=not_entailment  pred=entailment  [?/conditional_clause]
+       P: Tropical Storm Irene on August 11, 2005 at 16:15 UTC. Tropical Storm Irene will increase in strength over the next several days, possibly developing into   a hurricane that will hit the east coast of the United States, said the National Hurricane Center of Miami, Florida in a report today.  Irene was located approximately 975 kilometers south-southeast of Bermuda at 16:00 UTC today. Forecasters say that the storm is now moving in a west-  northwest direction with top sustained winds of 40 miles per hour.
+       H: A storm called Irene is going to approach the east coast of the US unless something prevents it.
+
+     #4  gold=not_entailment  pred=entailment  [?/conditional_clause]
+       P: Coextensive with the metropolitan district of Jakarta Raya, it lies at the mouth of the Ciliwung ( Liwung River ) on the northwest coast of Java.
+       H: Whether Jakarta lies precisely at the mouth of the Ciliwung (Liwung River) or slightly inland, it is situated on the northwest coast of the island of Java.
+
+     #5  gold=not_entailment  pred=entailment  [?/conditional_clause]
+       P: On Jan. 27, 1756, composer Wolfgang Amadeus Mozart was born in Salzburg, Austria.
+       H: Although Wolfgang Amadeus Mozart's exact birth circumstances are not thoroughly documented, he was born in Salzburg.
+
+     #6  gold=not_entailment  pred=entailment  [?/conditional_clause]
+       P: Gabriel Garcia Marquez is the author of "One Hundred Years of Solitude", "The Autumn of the Patriarch" and other novels.
+       H: Gabriel Garcia Marquez is a novelist and writer unless something prevents it.
+
+     #7  gold=not_entailment  pred=entailment  [?/conditional_clause]
+       P: As a result, peptic ulcer disease has been transformed from a chronic, frequently disabling condition to one that can be cured by a short regimen of antibiotics and other medicines.
+       H: In case conditions permit, antibiotics are used against peptic ulcer.
+
+     #8  gold=entailment  pred=not_entailment  [?/pronoun_substitution]
+       P: Following the successful bid to bring the 2010 Ryder Cup to Wales, the Wales Tourist Board has wasted little time in commissioning work to ensure that the benefits accruing from the event are felt throughout the country.
+       H: It will host the 2010 Ryder Cup.
+
+     #9  gold=entailment  pred=not_entailment  [?/pronoun_substitution]
+       P: The Disneyland of Europe is located 20 miles east of Paris. Euro Disney is a huge complex with hotels, restaurants, shops and a nearby golf course apart from the actual theme park. It provides a much better experience than its American cousin thanks to the marvels of modern engineering.
+       H: It is an entertainment park.
+
+     #10  gold=entailment  pred=not_entailment  [?/pronoun_substitution]
+       P: Merrill Lynch & Co. and Smith Barney, now a unit of Citigroup, in 1998 settled discrimination cases involving hundreds of female employees.
+       H: They are now a unit of Citigroup.
+
+     #11  gold=entailment  pred=not_entailment  [?/pronoun_substitution]
+       P: Four days of talks got underway with the US announcing the first significant overture to North Korea since George W Bush took office three years ago.
+       H: He entered the US presidency three years ago.
+
+     #12  gold=not_entailment  pred=entailment  [?/pronoun_substitution]
+       P: India's steelmaker Tata Steel, of the Tata Group, buys Anglo-Dutch steel giant Corus Group for £6.7 billion ($12 billion), making it the world's fifth largest steel manufacturer. 70-year-old Tata group Chairman Ratan Tata, from one of India's best-known business families, won the race against Benjamin Steinbruch, 52, a famous Brazilian executive who is the chief and main owner of Companhia Siderurgica Nacional (CSN). Tata paid investors 608 pence a share, whereas the Brazilians final offer in an auction by the U.K.'s Takeover Panel was 603 pence. The deal triples Tata Steel's capacity to almost 28 million tons a year. Tata: "This is the first step in showing that Indian industry can step outside its shores into an international market place as a global player." Corus, which was created from the merger of British Steel and Hoogovens, currently employs 47,300 people worldwide. Last year the company was the ninth-largest steel maker worldwide. The takeover may start a round of consolidation in the fragmented steel sector.
+       H: It produces 28 million tons of steel per year.
+
+     #13  gold=entailment  pred=not_entailment  [?/pronoun_substitution]
+       P: Swansea striker Lee Trundle has negotiated a lucrative image-rights deal with the League One club.
+       H: He is in business with the League One club.
+
+     #14  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: Steve Jobs was attacked by Sculley and other Apple executives for not delivering enough hot new products and resigned from the company a few weeks later.
+       H: Steve Jobs was employed by Apple.
+
+     #15  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: The international humanitarian aid organization, Doctors Without Borders/Medecins Sans Frontieres (MSF), continues to treat victims of violence in all locations where it is present in Darfur.
+       H: Physicians Without Borders is a global assistance group.
+
+     #16  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: Huckaby voluntarily submitted herself to questioning Friday night at the Tracy police station, and was arrested less than six hours later. She now resides in the San Joaquin County Jail without bond, awaiting an arraignment hearing on Tuesday. On April 6, the body of Sandra Cantu was discovered stuffed inside the 28-year-old's suitcase at the bottom of a pond a few miles away from her home. The two were neighbors in the Orchard Estates Mobile Home Park and Huckaby's own 5-year-old daughter often played with Cantu. Autopsy results are still pending.
+       H: Huckaby is charged with murdering Sandra Cantu.
+
+     #17  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: The IOC meeting will also review reports submitted by the organizing committees of the 1998 Winter Olympic Games in Nagano, Japan; the 2000 Summer Olympic Games in Sydney, Australia and the 2002 Winter Olympic Games in the Salt Lake City, the United States, respectively.
+       H: Prior to Salt Lake City, Winter Olympic Games were held in Nagano.
+
+     #18  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: Russian cosmonaut Valery Polyakov set the record for the longest continuous amount of time spent in space, a staggering 438 days, between 1994 and 1995.
+       H: Russians maintain record for most extended duration in space.
+
+     #19  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: Nokia, Texas Instruments and other leading makers of mobile phones have formally complained to Brussels that Qualcomm, the US mobile chipmaker, has unfairly used its patents on 3G technologies.
+       H: Texas Instruments manufactures cell phones.
+
+     #20  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: Without a natural greenhouse effect, the temperature of the Earth would be about zero degrees F (-18C) instead of its present 57F (14C).
+       H: Greenhouse phenomenon alters worldwide weather.
+
+     #21  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: For US pharmaceutical companies, the impending healthcare reforms promise an era of increased cost-containment and pricing controls.
+       H: The US government aims to maintain low drug costs.
+
+     #22  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: About 33.5 million people live in this massive conurbation. I would guess that 95% of the 5,000 officially foreign-capital firms in Japan are based in Tokyo.
+       H: Approximately 33.5 million individuals reside in Tokyo.
+
+     #23  gold=not_entailment  pred=entailment  [?/synonym_replacement]
+       P: The official visit of the Argentine minister marks a further step in the normalisation of UK-Argentine relations.
+       H: Ties between Argentina and Great Britain are becoming increasingly collaborative.
+
+     #24  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: South America - The President of Colombia Alvaro Uribe is scheduled to meet the President of Venezuela Hugo Chávez Thursday. Apparently the crisis between Venezuela and Colombia is almost solved. The crisis began with the imprisonment of the alleged FARC member Rodrigo Granda by Colombian forces on December 13, 2004. Venezuela accused Colombian of invading Venezuelan territory. Colombia accused Venezuela of harboring FARC terrorists. The President of Cuba, Fidel Castro, intervened in the crisis and talked to Chavez and Uribe.
+       H: Alvaro Uribe is the present leader of Colombia.
+
+     #25  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: Merrill Lynch & Co. and Smith Barney, now a unit of Citigroup, in 1998 settled discrimination cases involving hundreds of female employees.
+       H: Merrill Lynch & Co. and Smith Barney have become a division of Citigroup.
+
+     #26  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: The Massachusetts Supreme Judicial Court has cleared the way for lesbian and gay couples in the state to marry, ruling that government attorneys "failed to identify any constitutionally adequate reason" to deny them the right.
+       H: U.S. Supreme Court supports same-sex marriage
+
+     #27  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: Cote d'Ivoire's President, Laurent Gbagbo, promulgated new election laws on July 14.
+       H: Head of State Laurent Gbagbo resides in Côte d'Ivoire.
+
+     #28  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: On July 12 Portuguese President Jorge Sampaio asks Pedro Santana Lopes to form a government. The new government is sworn in on July 17 and includes António Monteiro as foreign minister, Daniel Sanches as interior minister, and António Bago Flix as finance minister; Paulo Portas remains defense minister.
+       H: Recent Portuguese premier is chosen.
+
+     #29  gold=not_entailment  pred=entailment  [?/synonym_replacement]
+       P: Philadelphia is considered the birthplace of the United States of America, where the Declaration of Independence and Constitution were written and signed in the city's Independence Hall.
+       H: The American Declaration of Independence is situated in Philadelphia.
+
+     #30  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: Though the exact date is debated, dogs are thought to have been domesticated by humans approximately 12,000 years ago.
+       H: People lived 10,000 years ago.
+
+     #31  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: Thus began the journey that led Hannam, a 29-year-old free-lance journalist, on an international quest to solve one of the greatest mysteries of Asia: What happened to Lin Piao, the Chinese Communist Party leader accused of a 1971 plot to overthrow Chairman Mao.
+       H: Lin Piao was the Chinese Communist Party chief.
+
+     #32  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: An auto analyst for Bombay's Angel Broking, Vaishali Jajoo, predicted that the Nano will add only three percent to Tata's revenues even if it can sell a quarter of a million such cars per annum. "That doesn't make a significant difference to the top line," Jajoo said. "And for the bottom line, it will take five to six years to break even." Environmentalists say that the car will exacerbate traffic problems already rife in India, and help increase pollution levels. Tata, however, stated that its vehicle is the least polluting car in the country.
+       H: Angel Broking is located in Mumbai.
+
+     #33  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: COLOMBO (Reuters) - At least five people were killed and 11 wounded when a suspected Tamil Tiger suicide bomber blew herself up inside a police station in the Sri Lankan capital on Wednesday, shattering more than two years of relative peace.
+       H: Individuals were slain in Tamil suicide assaults.
+
+     #34  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: It has been observed that in those countries of the world where capital punishment is still in operation, the crime rate, especially murder, is distinctively low in comparison to countries where capital punishment has been discarded.
+       H: The death penalty acts as a deterrent against criminal activity.
+
+     #35  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: Ahern, who was travelling to Tokyo for an EU-Japan summit yesterday, will consult with other EU leaders by telephone later this week in an effort to find an agreed candidate.
+       H: A meeting between Europe and Japan is occurring in the Japanese capital.
+
+     #36  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: US President Barack Obama has been sketching out the future direction of his administration, in events to mark his first 100 days in office. Mr Obama addressed a town hall meeting in St Louis before holding a primetime news conference, broadcast live on most US TV networks. Traditionally, commentators have used the milestone to assess presidents' early successes and failures. Latest polls suggest Mr Obama continues to enjoy a high level of popularity.
+       H: Barack Obama has been Commander-in-Chief of the U.S. for 100 days.
+
+     #37  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: Blair has sympathy for anyone who has lost their lives in Iraq.
+       H: Blair regrets any loss of life in Iraq.
+
+     #38  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: He said that "there is evidence that Cristiani was involved in the murder of the six Jesuit priests" which occurred on 16 November in San Salvador.
+       H: Cristiani is charged with the murder of six Jesuits.
+
+     #39  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: Foreign Carmakers Gain in Russia. The likes of Daewoo, Ford, Renault, and more can't produce fast enough.
+       H: European automobiles are sold in Russia.
+
+     #40  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: The number of Danes opposed to swapping the krone for the euro has increased slightly to 35.3 percent, up from 34.6 percent in April, according to a poll published on Thursday by Danske Bank.
+       H: The launch of the euro has been resisted.
+
+     #41  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: Texas Data Recovery is also successful at retrieving lost data from notebooks and laptops, regardless of age, make or model.
+       H: In the event of an emergency, you might employ Texas Data Recovery and you will possess the ability to recover lost information.
+
+     #42  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: The mistaken spelling, Miller explained, was made in a section of her notes unrelated to the interviews with Libby.  Other notes documented 3 interviews with Libby, conducted in the year 2003, that in her NYT column she wrote: June 23) ... Mr. Libby raised the subject of Mr. Wilson's wife for the first time. I wrote in my notes, inside parentheses, "Wife works in bureau?" I told Mr. Fitzgerald that I believed this was the first time I had been told that Mr. Wilson's wife might work for the C.I.A.
+       H: Judith Miller is employed by the New York Times.
+
+     #43  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: Capital punishment acts as a deterrent.
+       H: The death penalty is a preventive measure against criminal activity.
+
+     #44  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: Sheriff's officials said a robot could be put to use in Ventura County, where the bomb squad has responded to more than 40 calls this year.
+       H: Authorities employ machines for explosive management.
+
+     #45  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: In support of the Earth Island Institute rebuttal, Greenpeace founder Don White made the following - unfortunately prophetic - public statement on 8/18/93.
+       H: Don White is the creator of Greenpeace.
+
+     #46  gold=not_entailment  pred=entailment  [?/synonym_replacement]
+       P: NASA estimated, Monday, that it will cost $104 billion to return astronauts to the moon, by 2018, in a new rocket that combines the space shuttle with the capsule of an earlier NASA era.
+       H: The innovative spacecraft blueprint incorporates shuttle rocket components and a capsule reminiscent of Apollo.
+
+     #47  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: Gabriel Garcia Marquez is the author of "One Hundred Years of Solitude", "The Autumn of the Patriarch" and other novels.
+       H: Gabriel Garcia Marquez is an author and scribe.
+
+     #48  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: High dietary intake of potassium from fruits and vegetables throughout one's life helps to preserve bone mass, thereby preventing bone loss that can lead to osteoporosis.
+       H: Consumption of potassium averts osteoporosis.
+
+     #49  gold=not_entailment  pred=entailment  [?/synonym_replacement]
+       P: A new report indicates that women's participation in decision-making in the country is minimal.
+       H: Females are inadequately represented in parliament.
+
+     #50  gold=entailment  pred=not_entailment  [?/synonym_replacement]
+       P: On October 1 2001, EU and other countries introduced the option for domestic animal owners to apply for Pet passports under the Pets Travel Scheme (PETS for short), for pets returning from abroad to the United Kingdom. This replaced the old system of 6 months compulsory quarantine for all domestic pets.
+       H: In 2001, the EU implemented a pass for animals.
+
+     #51  gold=entailment  pred=not_entailment  [?/voice_switch]
+       P: The mistaken spelling, Miller explained, was made in a section of her notes unrelated to the interviews with Libby.  Other notes documented 3 interviews with Libby, conducted in the year 2003, that in her NYT column she wrote: June 23) ... Mr. Libby raised the subject of Mr. Wilson's wife for the first time. I wrote in my notes, inside parentheses, "Wife works in bureau?" I told Mr. Fitzgerald that I believed this was the first time I had been told that Mr. Wilson's wife might work for the C.I.A.
+       H: The New York Times is worked for by Judith Miller.
+
+
+────────────────────────────────────────────────────────────────
+  6. Token Usage
+────────────────────────────────────────────────────────────────
+     Samples with usage data: 812
+     Total prompt tokens:     85294
+     Total completion tokens: 3818
+     Total cached tokens:     23808
+     Total tokens:            89112
+     Avg per sample:          109.7
+
+================================================================
