@@ -11,6 +11,9 @@ dist/
 build/
 .eggs/
 
+# --- paper
+paper/
+
 # --- Data (test datasets are large, download from source) ---
 data/
 test_only_MR/
