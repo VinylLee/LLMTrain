@@ -1,0 +1,495 @@
+{"premise": "The young boys are playing outdoors and the man is smiling nearby", "hypothesis": "There is no boy playing outdoors and there is no man smiling", "label": 2}
+{"premise": "A person in a black jacket is doing tricks on a motorbike", "hypothesis": "A skilled person is riding a bicycle on one wheel", "label": 1}
+{"premise": "Four children are doing backbends in the gym", "hypothesis": "Four girls are doing backbends and playing outdoors", "label": 1}
+{"premise": "A player is throwing the ball", "hypothesis": "Two teams are competing in a football match", "label": 1}
+{"premise": "Five children are standing in front of a wooden hut", "hypothesis": "Five children are standing in a wooden hut", "label": 1}
+{"premise": "Few people are eating at red tables in a restaurant without lights", "hypothesis": "A large group of Asian people is eating at a restaurant", "label": 1}
+{"premise": "Someone is on a black and white motorcycle and is standing on the seat", "hypothesis": "A motorcycle is riding standing up on the seat of the vehicle", "label": 1}
+{"premise": "Two dogs are playing by a tree", "hypothesis": "Two dogs are playing by a plant", "label": 0}
+{"premise": "A girl in white is dancing", "hypothesis": "A girl is wearing white clothes and is dancing", "label": 0}
+{"premise": "There is no girl in white dancing", "hypothesis": "A girl in white is dancing", "label": 2}
+{"premise": "The equipment in front of the blond dancing girl is sound", "hypothesis": "A girl in white is dancing", "label": 1}
+{"premise": "A girl in white is dancing", "hypothesis": "The blond girl is dancing in front of the sound equipment", "label": 1}
+{"premise": "The children of a family are playing and waiting", "hypothesis": "An Asian man is dancing and three kids are looking", "label": 1}
+{"premise": "A hiker is on top of the mountain and is doing a joyful dance", "hypothesis": "A hiker is on top of the mountain and is dancing", "label": 0}
+{"premise": "A boy is standing outside the water", "hypothesis": "The boy is wading through the blue ocean", "label": 1}
+{"premise": "A bald person is playing a guitar", "hypothesis": "A person has blonde and flyaway hair and is playing a guitar", "label": 1}
+{"premise": "An old, topless woman is covered in paint", "hypothesis": "A young, topless woman is covered in paint", "label": 1}
+{"premise": "A group of children in uniforms is standing at a gate and there is no one kissing the mother", "hypothesis": "A crowd of people is near the water", "label": 1}
+{"premise": "A brown and white dog is running through the tall grass", "hypothesis": "A brown and white dog is moving through the wild grass", "label": 1}
+{"premise": "A white and tan dog is running through the tall and green grass", "hypothesis": "A white and tan dog is running through a field", "label": 0}
+{"premise": "A man is sitting near a bike and is writing a note", "hypothesis": "A man is standing near a bike and is writing on a piece paper", "label": 1}
+{"premise": "A group of scouts are hiking through the grass", "hypothesis": "A group of explorers are walking through the grass", "label": 1}
+{"premise": "Two men are taking a break from a trip on a snowy road", "hypothesis": "Two men with cars are on the side of a snowy road", "label": 1}
+{"premise": "A lady is surfing and riding a wave", "hypothesis": "A blond girl is looking at the waves", "label": 1}
+{"premise": "The woman wearing silver pants, pink bellbottoms and a pink scarf is riding a bike", "hypothesis": "Pink bellbottoms and a pink scarf aren't to be worn by women with silver pants or bike riding people", "label": 1}
+{"premise": "The woman wearing silver pants, pink bellbottoms and a pink scarf is riding a bike", "hypothesis": "A pedestrian woman is building pink bicycles for boa wearing riders", "label": 1}
+{"premise": "A biker is wearing gear which is black", "hypothesis": "A biker wearing black is breaking the gears", "label": 1}
+{"premise": "A woman is taking off a cloak, which is very large, and revealing an extravagant dress", "hypothesis": "A woman is putting on a cloak, which is very large, and concealing an extravagant dress", "label": 2}
+{"premise": "A boy is climbing up a wall artificially built for climbing and is attached to a rope", "hypothesis": "A little boy, who looks fearful, is on a climbing wall.", "label": 1}
+{"premise": "A man isn't tossing a kid into the swimming pool that is near the ocean", "hypothesis": "The man is tossing a kid into the swimming pool that is near the ocean", "label": 2}
+{"premise": "One man is climbing a cliff with a rope", "hypothesis": "A person with pink climbing gear roped the rock", "label": 1}
+{"premise": "A person is climbing a rock with a rope, which is pink", "hypothesis": "One man is climbing a cliff with a rope", "label": 1}
+{"premise": "One white dog is staring at the black street", "hypothesis": "Two dogs of different breeds are looking at each other across a street", "label": 1}
+{"premise": "A few men in a competition are running outside", "hypothesis": "A few men in a competition are running indoors", "label": 2}
+{"premise": "A few men in a competition are running outside", "hypothesis": "A few men are running competitions outside", "label": 1}
+{"premise": "The kid is happily sliding in the snow", "hypothesis": "A boy on a hill covered in snow is wearing a red jacket and a black hat and is sliding on his knees", "label": 1}
+{"premise": "A woman, who is old, is near a white dog", "hypothesis": "A woman and a dog are sitting on a tree stump", "label": 1}
+{"premise": "A group of people is equipped with protective gear", "hypothesis": "A group of people is equipped with gear used for protection", "label": 0}
+{"premise": "One white dog and one black one are running side by side on the grass", "hypothesis": "A dog, which has a black coat, and a white dog are running on the grass", "label": 0}
+{"premise": "Not a lot of people are in an ice skating park", "hypothesis": "An ice skating rink placed outdoors is full of people", "label": 1}
+{"premise": "The girl in the blue and white uniform is cheering", "hypothesis": "The girl is cheering the man in the blue and white uniform", "label": 1}
+{"premise": "A woman is being kissed by a man", "hypothesis": "There is no woman being kissed by a man", "label": 2}
+{"premise": "The girl in the red shirt is blowing a bubble", "hypothesis": "The young girl is blowing a bubble that is huge", "label": 1}
+{"premise": "Some corndogs are being eaten by two toddlers who are in a wagon, which is really small", "hypothesis": "Two toddlers are eating corndogs in a wagon, which is really small", "label": 0}
+{"premise": "A man is getting on a horse on a track laid in the wild", "hypothesis": "A horse is tossing the cowboy wearing pants of blue and red color", "label": 1}
+{"premise": "An adult is in the amphitheater and is talking to a boy", "hypothesis": "There is no adult in the amphitheater talking to a boy", "label": 2}
+{"premise": "A talk about an adult and a boy is given in the amphitheater", "hypothesis": "An adult is in the amphitheater and is talking to a boy", "label": 1}
+{"premise": "The snowboarder isn't leaping over white snow", "hypothesis": "A person who is practicing snowboarding jumps into the air", "label": 1}
+{"premise": "A woman is riding a horse", "hypothesis": "A man is opening a small package that contains headphones", "label": 1}
+{"premise": "A fish is hunting for a turtle in the sea", "hypothesis": "The turtle is following the fish", "label": 1}
+{"premise": "A potato is being sliced by a woman", "hypothesis": "A woman is slicing a carrot", "label": 1}
+{"premise": "A woman is combing her hair", "hypothesis": "A woman is arranging her hair", "label": 1}
+{"premise": "A woman is combing her hair", "hypothesis": "There is no woman combing her hair", "label": 2}
+{"premise": "A man and a woman are hiking through a wooded area", "hypothesis": "A man and a woman are walking together through the woods", "label": 0}
+{"premise": "A man and a woman are walking together through the woods", "hypothesis": "A man and a woman are walking through a wooded area", "label": 0}
+{"premise": "A man is slicing a bun", "hypothesis": "A man is slicing a tomato", "label": 1}
+{"premise": "A woman is dancing and singing alone", "hypothesis": "A woman is dancing and singing with other women", "label": 2}
+{"premise": "Some women are dancing and singing", "hypothesis": "A woman is dancing and singing in the rain", "label": 1}
+{"premise": "A woman is dancing and singing with other women", "hypothesis": "A woman is dancing and singing in the rain", "label": 1}
+{"premise": "A band is playing on a stage", "hypothesis": "A band is playing onstage", "label": 0}
+{"premise": "A man is playing flute", "hypothesis": "A man is playing a game with a ball", "label": 1}
+{"premise": "The woman is measuring the other woman", "hypothesis": "A woman is being measured by another woman", "label": 0}
+{"premise": "A person is standing near a motorcycle", "hypothesis": "A person is chopping an onion", "label": 1}
+{"premise": "A man is screaming", "hypothesis": "A man is scared", "label": 1}
+{"premise": "A sad man is crying", "hypothesis": "A man is screaming", "label": 1}
+{"premise": "A woman is cutting shrimps", "hypothesis": "A man is chopping butter into a small container", "label": 1}
+{"premise": "Men are sawing logs", "hypothesis": "Men are cutting wood", "label": 0}
+{"premise": "A man is talking on the radio", "hypothesis": "A man is spitting", "label": 1}
+{"premise": "Three young men are running, jumping and kicking near a vending machine", "hypothesis": "There is no man running, jumping and kicking near a vending machine", "label": 2}
+{"premise": "Three men are jumping off a wall", "hypothesis": "Three young men are furiously running, jumping and kicking near a vending machine", "label": 1}
+{"premise": "The man is not stirring the sauce for the chicken", "hypothesis": "The man is stirring the sauce for the chicken", "label": 2}
+{"premise": "A man is playing an electric guitar", "hypothesis": "A man is playing guitar", "label": 0}
+{"premise": "A man is playing a guitar", "hypothesis": "A man is strumming a guitar", "label": 0}
+{"premise": "Three boys in karate costumes aren't fighting", "hypothesis": "Three boys in karate costumes are fighting", "label": 2}
+{"premise": "Three men are practicing karate outdoors", "hypothesis": "Three boys in karate costumes are fighting", "label": 1}
+{"premise": "A woman is planting some flowers", "hypothesis": "A woman is cutting broccoli", "label": 1}
+{"premise": "A hole is being burrowed by the badger", "hypothesis": "A badger is shrewdly digging the earth", "label": 0}
+{"premise": "A snake is being fed a mouse by a man", "hypothesis": "No snake is being fed a mouse by a man", "label": 2}
+{"premise": "Some ingredients are being mixed in a bowl by a person", "hypothesis": "Some ingredients are being separated in a bowl by a person", "label": 1}
+{"premise": "A boat is sailing peacefully over the water", "hypothesis": "The guitar is being played by the man", "label": 1}
+{"premise": "The milk is being drunk by a cat", "hypothesis": "The cat is drinking some milk", "label": 0}
+{"premise": "A man is emptying a container made of plastic completely", "hypothesis": "A man is emptying a container made of plastic", "label": 0}
+{"premise": "A man is emptying a container made of plastic", "hypothesis": "A man is carelessly holding a frog", "label": 1}
+{"premise": "A flute is being played in a lovely way by a girl", "hypothesis": "A flute is being played by a girl", "label": 0}
+{"premise": "The adult is playing the guitar loudly", "hypothesis": "A flute is being played by a man", "label": 1}
+{"premise": "A man is playing the guitar loudly", "hypothesis": "A flute isn't being played by a man", "label": 1}
+{"premise": "The girl, who is little, is carefully combing her hair into a pony tail", "hypothesis": "The girl, who is little, is combing her hair into a pony tail.", "label": 0}
+{"premise": "One man is sitting on the chair", "hypothesis": "The girl, who is little, is ruffling her hair", "label": 1}
+{"premise": "The microphone in front of the talking parrot is being muted", "hypothesis": "The parrot is talking into the microphone", "label": 1}
+{"premise": "The kittens on the trays are being eaten as food for an advertisement", "hypothesis": "The food on the trays is being eaten by the kittens", "label": 1}
+{"premise": "The food on the trays is being eaten by the kittens", "hypothesis": "A few kittens are eating", "label": 0}
+{"premise": "One person is playing the guitar and singing", "hypothesis": "A person is playing a guitar and singing", "label": 0}
+{"premise": "The horse is being ridden by a man", "hypothesis": "A man is riding the horse", "label": 0}
+{"premise": "A man is dangerously throwing knives at a tree", "hypothesis": "Some dangerous men with knives are throwing a bike against a tree", "label": 1}
+{"premise": "A lady is cutting up some meat precisely", "hypothesis": "Some meat is being cut into pieces by a woman", "label": 0}
+{"premise": "The man is denying an interview", "hypothesis": "The man is granting an interview", "label": 2}
+{"premise": "The man is granting an interview", "hypothesis": "A man's white car is being driven away", "label": 1}
+{"premise": "A small boy is scolding a dog", "hypothesis": "A small boy is playing with a dog", "label": 1}
+{"premise": "The picture of a camera set up is being taken by a man on the beach at the sunset", "hypothesis": "A man is taking pictures of a lake", "label": 1}
+{"premise": "A woman is sewing with a machine", "hypothesis": "A woman is using a machine made for sewing", "label": 0}
+{"premise": "Someone is falling off a horse", "hypothesis": "The man is not knocked off of a horse", "label": 1}
+{"premise": "A woman is tapping her fingers on a table", "hypothesis": "A woman is resting her fingers on a table", "label": 1}
+{"premise": "A woman is tapping her fingers", "hypothesis": "A woman is resting her fingers on a table", "label": 1}
+{"premise": "The cat is playing passionately with a watermelon", "hypothesis": "The cat is playing with a watermelon", "label": 0}
+{"premise": "The cat is playing passionately with a watermelon", "hypothesis": "A cat is playing with a watermelon", "label": 0}
+{"premise": "A person is burning some cameras with a blow torch", "hypothesis": "The tall person is setting fire to the cameras", "label": 1}
+{"premise": "Some cameras are being burned by a person with a blow torch", "hypothesis": "The person is setting fire to the cameras", "label": 0}
+{"premise": "A person by some cameras is blowing on a burning torch", "hypothesis": "The person is setting fire to the cameras", "label": 1}
+{"premise": "A person is cutting an onion into pieces", "hypothesis": "A person is slicing a carrot into pieces", "label": 1}
+{"premise": "The man is not slicing the potato", "hypothesis": "The man is slicing a potato", "label": 2}
+{"premise": "Someone is cutting a tomato", "hypothesis": "The woman is holding a whole tomato", "label": 1}
+{"premise": "The lady is slicing a tomato", "hypothesis": "There is no one cutting a tomato", "label": 2}
+{"premise": "The lady is slicing a tomato", "hypothesis": "Someone is cutting a tomato", "label": 0}
+{"premise": "A man is preparing some dish", "hypothesis": "An onion is being sliced with a knife by the woman", "label": 1}
+{"premise": "One man is running down the road", "hypothesis": "A man is running", "label": 0}
+{"premise": "Some people are singing", "hypothesis": "A group of people is singing", "label": 0}
+{"premise": "The man is playing a guitar", "hypothesis": "A man is playing a trumpet", "label": 1}
+{"premise": "A few people are floating on a raft", "hypothesis": "People are riding and paddling a raft", "label": 1}
+{"premise": "People are riding and paddling a raft", "hypothesis": "Four people are floating on a raft", "label": 1}
+{"premise": "There is no cat eating corn on the cob", "hypothesis": "A cat is eating some corn", "label": 1}
+{"premise": "The person is slicing a vegetable", "hypothesis": "Nobody is slicing a tomato", "label": 1}
+{"premise": "Someone is strumming the guitar", "hypothesis": "Someone is playing the guitar", "label": 0}
+{"premise": "Three women are dancing", "hypothesis": "A few women are dancing", "label": 0}
+{"premise": "A bull dog is being brushed by the monkey", "hypothesis": "The monkey is brushing a bull dog", "label": 0}
+{"premise": "The monkey is brushing a bull dog", "hypothesis": "A bull dog is brushing the monkey", "label": 1}
+{"premise": "The lady isn't cracking an egg for the mixer", "hypothesis": "The lady is slicing up the meat", "label": 1}
+{"premise": "A few ferrets are climbing out of the cage", "hypothesis": "Ferrets are climbing down from a shelf", "label": 1}
+{"premise": "A man is hurriedly getting into a car in a garage", "hypothesis": "A man is getting into a car", "label": 0}
+{"premise": "A man is parking a car in a garage", "hypothesis": "A man is getting into a car", "label": 1}
+{"premise": "The person is slicing a clove of garlic into pieces", "hypothesis": "The person is not slicing a clove of garlic into pieces", "label": 2}
+{"premise": "Noodles are being boiled in water by a woman", "hypothesis": "A woman is boiling noodles in water", "label": 0}
+{"premise": "There is no karate practitioner kicking at another man who is wearing protective boxing gloves", "hypothesis": "A karate practitioner is kicking at another man who is wearing protective boxing gloves", "label": 2}
+{"premise": "The man is kick boxing with a trainer", "hypothesis": "There is no karate practitioner kicking at another man who is wearing protective boxing gloves", "label": 1}
+{"premise": "The man is kick boxing with a trainer", "hypothesis": "A karate practitioner is kicking at another man who is wearing protective boxing gloves", "label": 1}
+{"premise": "A woman, who is seated, is singing a song and playing the guitar", "hypothesis": "A seated woman is singing a song and playing the guitar", "label": 0}
+{"premise": "A woman on a rock is lying on a blanket and reading a book", "hypothesis": "A woman is rocking over a blanket lying on someone reading a book", "label": 1}
+{"premise": "The woman is not playing an electric guitar", "hypothesis": "A man is playing an acoustic guitar", "label": 1}
+{"premise": "A man and woman are talking", "hypothesis": "A man and a woman are eating happily", "label": 1}
+{"premise": "A person is pouring oil for cooking into a pot", "hypothesis": "A person is pouring cooking oil into a pot", "label": 0}
+{"premise": "A guinea pig, which is small, is gnawing and eating a piece of carrot on the floor", "hypothesis": "A small guinea pig is gnawing and eating a piece of carrot on the floor", "label": 0}
+{"premise": "A small guinea pig is gnawing and eating a piece of carrot on the floor", "hypothesis": "A guinea pig is devouring a carrot", "label": 0}
+{"premise": "A plane is landing", "hypothesis": "An animated airplane is taking off", "label": 1}
+{"premise": "A woman is taking a mixture out of a bowl", "hypothesis": "A woman is preparing an egg in a skillet", "label": 1}
+{"premise": "The lady is penciling on eyeshadow", "hypothesis": "The woman is penciling on eyeshadow", "label": 0}
+{"premise": "A little girl is playing a grand piano on stage", "hypothesis": "A girl is practicing the piano", "label": 1}
+{"premise": "A woman is playing a flute", "hypothesis": "The woman is not playing the flute", "label": 2}
+{"premise": "The man is lifting barbells", "hypothesis": "The man is lifting weights", "label": 0}
+{"premise": "A woman is putting on makeup", "hypothesis": "There is no woman putting on makeup", "label": 2}
+{"premise": "The woman is cutting a carrot", "hypothesis": "An onion is being sliced by a woman", "label": 1}
+{"premise": "Two men are fighting in a cattle pen", "hypothesis": "Two men are outside a cattle pen", "label": 1}
+{"premise": "A big green ball is missing a potato", "hypothesis": "A big green ball is knocking a potato", "label": 1}
+{"premise": "A large green ball is hitting a potato", "hypothesis": "A large green colored ball is hitting a potato", "label": 0}
+{"premise": "A large green ball is missing a potato", "hypothesis": "A large green ball is hitting a potato", "label": 1}
+{"premise": "A large green ball is hitting a potato", "hypothesis": "A big green ball is missing a potato", "label": 2}
+{"premise": "A man is playing a guitar", "hypothesis": "A man is laying down a guitar", "label": 1}
+{"premise": "A woman is playing an electric guitar", "hypothesis": "A man is laying down a guitar", "label": 1}
+{"premise": "The puppy is not playing with a plastic container", "hypothesis": "The puppy is playing with a plastic container", "label": 2}
+{"premise": "A woman is driving a car and is talking to the man who is seated beside her", "hypothesis": "There is no woman driving a car and talking to the man seated beside her", "label": 2}
+{"premise": "A man is flooring a sitting guitar player", "hypothesis": "A man is sitting on the floor in a room and strumming a guitar", "label": 1}
+{"premise": "A woman is using a pencil for eyes and is applying eye liner to her eyelid", "hypothesis": "A woman is applying cosmetics to her eyelid", "label": 0}
+{"premise": "There is no woman using an eye pencil and applying eye liner to her eyelid", "hypothesis": "A woman is applying cosmetics to her eyelid", "label": 2}
+{"premise": "A monkey is kicking at a person's glove", "hypothesis": "The monkey is practicing martial arts", "label": 1}
+{"premise": "A kid is throwing away an instrument", "hypothesis": "A young boy is playing a wind instrument", "label": 1}
+{"premise": "A man is trekking in the woods", "hypothesis": "The man is not hiking in the woods", "label": 1}
+{"premise": "There is no boy walking across a bridge", "hypothesis": "A boy is walking across a bridge", "label": 2}
+{"premise": "A woman is placing two eggs into a pot of water", "hypothesis": "A woman is putting two eggs into a pot of water", "label": 0}
+{"premise": "A child is running in and out of the waves of the ocean", "hypothesis": "A child is running in and out of the ocean waves", "label": 0}
+{"premise": "A woman is putting away carrots", "hypothesis": "A woman is coating a pork chop", "label": 1}
+{"premise": "A woman is grating carrots", "hypothesis": "A cook is coating a pork chop", "label": 1}
+{"premise": "The woman is chopping some bread and fried pork", "hypothesis": "A woman is cooking a breaded pork chop", "label": 1}
+{"premise": "There is no man standing on a roof top and playing a violin", "hypothesis": "A man is standing on a roof top and playing a violin", "label": 2}
+{"premise": "A woman is cleaning a shrimp", "hypothesis": "The woman is cleaning a shrimp", "label": 0}
+{"premise": "A woman is riding a water scooter", "hypothesis": "A woman is riding a scooter for water", "label": 0}
+{"premise": "A panda bear is eating some bamboo", "hypothesis": "Some bamboo is being eaten by a panda bear", "label": 0}
+{"premise": "Someone is beating an egg", "hypothesis": "The woman isn't stirring eggs in a bowl", "label": 1}
+{"premise": "A woman is deboning a fish", "hypothesis": "A big fish is catching a man", "label": 1}
+{"premise": "A tray is being buttered by a person", "hypothesis": "A person is buttering a tray", "label": 0}
+{"premise": "The man is chopping a tree trunk with an axe", "hypothesis": "A man is chopping a log with an axe", "label": 1}
+{"premise": "The cat is looking out the window at the table on the perch", "hypothesis": "The cat perched on the table is looking out the window", "label": 1}
+{"premise": "A dog is licking a baby", "hypothesis": "The dog is licking the baby", "label": 0}
+{"premise": "A woman is putting away the garlic", "hypothesis": "A woman is chopping up garlic", "label": 1}
+{"premise": "The man is not dancing", "hypothesis": "A woman is dancing", "label": 1}
+{"premise": "Someone is cooking okra in a pan", "hypothesis": "Okra is being cooked in a pan", "label": 0}
+{"premise": "A man is playing the drum", "hypothesis": "A man is practicing the drum", "label": 0}
+{"premise": "One man is doing floor exercises", "hypothesis": "A man is doing exercises", "label": 0}
+{"premise": "A woman is putting meat in a pan", "hypothesis": "There is no woman putting meat in a pan", "label": 2}
+{"premise": "Someone is dropping the meat into a pan", "hypothesis": "The meat is being dropped into a pan", "label": 0}
+{"premise": "A boy is filling a pitcher with water", "hypothesis": "A pitcher is being filled with water by a boy", "label": 0}
+{"premise": "A woman is collecting the water from a tap in a mug", "hypothesis": "A boy is filling a pitcher with water", "label": 1}
+{"premise": "It is raining on a walking man", "hypothesis": "A man is walking in the rain", "label": 0}
+{"premise": "Racers are running down a track", "hypothesis": "There are no racers running down a track", "label": 2}
+{"premise": "A toy train is striking a toy car", "hypothesis": "A toy train is missing a toy car", "label": 2}
+{"premise": "The person is slicing onions", "hypothesis": "Onions are being sliced by the person", "label": 0}
+{"premise": "Swimmers are racing in a lake", "hypothesis": "Some racers are swimming in a lake", "label": 0}
+{"premise": "A talented man is playing the guitar", "hypothesis": "A woman is playing a guitar", "label": 1}
+{"premise": "A person is scrubbing a zucchini", "hypothesis": "The person is scrubbing a zucchini", "label": 0}
+{"premise": "A woman is slicing a pepper which is green", "hypothesis": "A woman is slicing a green pepper", "label": 0}
+{"premise": "A man is stopping in the middle of a road", "hypothesis": "A man is walking down a road", "label": 1}
+{"premise": "A man from the wilderness is on a walking path", "hypothesis": "A man is walking down a road", "label": 1}
+{"premise": "The man is walking along a path through the wilderness", "hypothesis": "A man is lazily walking down a road", "label": 1}
+{"premise": "A man is dancing on the ceiling of a room", "hypothesis": "The man is dancing upside-down on the ceiling", "label": 0}
+{"premise": "There is no man exercising", "hypothesis": "A man is exercising", "label": 2}
+{"premise": "The man is singing and playing the guitar", "hypothesis": "The guitar is being played by a man", "label": 0}
+{"premise": "A man is packing the guitar", "hypothesis": "The man is singing and playing the guitar", "label": 1}
+{"premise": "Boys are not dancing in front of some people", "hypothesis": "Boys are dancing in front of some people", "label": 2}
+{"premise": "A boy is looking at a calendar", "hypothesis": "There is no boy checking a calendar", "label": 2}
+{"premise": "A woman is peeling a potato", "hypothesis": "A woman is refrigerating a potato", "label": 1}
+{"premise": "There is no man singing and playing a guitar", "hypothesis": "A boy is playing a piano", "label": 1}
+{"premise": "A man is recklessly climbing a rope", "hypothesis": "A man is climbing a rope", "label": 0}
+{"premise": "A man is climbing a rope", "hypothesis": "The man is climbing up a rope", "label": 0}
+{"premise": "A man is climbing a rope", "hypothesis": "A man is climbing up a rope", "label": 0}
+{"premise": "The lady is picking up the kangaroo", "hypothesis": "The woman is picking up the kangaroo", "label": 0}
+{"premise": "A man is breaking tiles with his hands", "hypothesis": "There is no man breaking wooden boards with his hand", "label": 1}
+{"premise": "A dog is running breathlessly on the road", "hypothesis": "A dog is running on the road", "label": 0}
+{"premise": "A man is running on the road", "hypothesis": "A dog is running breathlessly on the road", "label": 1}
+{"premise": "The man is hurling knives at a tree", "hypothesis": "The man is throwing knives at a tree", "label": 0}
+{"premise": "The man is removing knives from a tree", "hypothesis": "The man is throwing knives at a tree", "label": 1}
+{"premise": "One man is riding a horse", "hypothesis": "A man is riding a horse", "label": 0}
+{"premise": "There is no man drawing a picture", "hypothesis": "A man is drawing a picture", "label": 2}
+{"premise": "There is no man eating food", "hypothesis": "A man is eating a pizza", "label": 2}
+{"premise": "A dog is bouncing on a trampoline", "hypothesis": "A dog is jumping on a trampoline", "label": 0}
+{"premise": "Several boys are jumping on a trampoline", "hypothesis": "A man is doing back flips on a trampoline", "label": 1}
+{"premise": "A man is playing a wooden flute", "hypothesis": "There is no man playing a wooden flute", "label": 2}
+{"premise": "There is no man playing the piano", "hypothesis": "A man is playing the piano", "label": 2}
+{"premise": "The man is erasing the drawing on the board", "hypothesis": "The woman is erasing the drawing on the board", "label": 1}
+{"premise": "There is no dog playing with a toy", "hypothesis": "A dog is eating a doll", "label": 2}
+{"premise": "A dog is eating a doll", "hypothesis": "A dog is playing with a toy", "label": 1}
+{"premise": "A man is dancing", "hypothesis": "A man is praying fervently", "label": 1}
+{"premise": "The woman is slicing cooked octopus", "hypothesis": "A woman is chopping up an octopus", "label": 0}
+{"premise": "A man is drawing", "hypothesis": "There is no man drawing", "label": 2}
+{"premise": "The man is drawing", "hypothesis": "There is no man drawing", "label": 2}
+{"premise": "A man is eating a banana", "hypothesis": "A man is eating a fruit", "label": 0}
+{"premise": "A man is cutting a note", "hypothesis": "A man is cutting a paper", "label": 0}
+{"premise": "A man is playing a guitar", "hypothesis": "There is no one playing a piano", "label": 1}
+{"premise": "Two men in a race are flipping the tires of a tractor", "hypothesis": "Two men are competing in a tire rolling race", "label": 1}
+{"premise": "The men are talking", "hypothesis": "Some old women are talking", "label": 1}
+{"premise": "A man is punching a soccer ball", "hypothesis": "A man is mixing the content of a bowl", "label": 1}
+{"premise": "The doctors are healing a man", "hypothesis": "The doctor is helping the patient", "label": 0}
+{"premise": "A keyboard is being played by a man", "hypothesis": "A man is playing a harp", "label": 1}
+{"premise": "A man is cutting a thick rope with a sword", "hypothesis": "There is no man cutting a rope with a sword", "label": 2}
+{"premise": "A woman is slicing a potato", "hypothesis": "A woman is cutting a potato", "label": 0}
+{"premise": "A group of men is playing soccer on the beach", "hypothesis": "A group of boys is playing soccer on the beach", "label": 1}
+{"premise": "A man is fitting a silencer to a pistol", "hypothesis": "A man is applying a silencer to a gun", "label": 0}
+{"premise": "The girl is sitting on the couch and is crocheting", "hypothesis": "There is no girl playing the violin on a beach", "label": 1}
+{"premise": "A man is cooking a snake", "hypothesis": "There is no man cooking a snake", "label": 2}
+{"premise": "There is no boy playing guitar", "hypothesis": "A boy is playing guitar", "label": 2}
+{"premise": "There is no monkey teasing a dog at the zoo", "hypothesis": "A monkey is teasing a dog at the zoo", "label": 2}
+{"premise": "A monkey is pulling a dog's tail", "hypothesis": "A monkey is teasing a dog at the zoo", "label": 1}
+{"premise": "There is no person cutting some ginger", "hypothesis": "A person is cutting some ginger", "label": 2}
+{"premise": "A person is cutting some ginger", "hypothesis": "A person is slicing an onion", "label": 1}
+{"premise": "A man is slicing a potato into pieces", "hypothesis": "A man is not cutting a potato", "label": 2}
+{"premise": "A man is opening a box with a knife", "hypothesis": "There is no man opening a box with a knife", "label": 2}
+{"premise": "Some instruments are being played by a band", "hypothesis": "A band is playing some instruments", "label": 0}
+{"premise": "A band is not playing some instruments", "hypothesis": "A band is playing some instruments", "label": 2}
+{"premise": "A person is dancing", "hypothesis": "A woman is exercising", "label": 1}
+{"premise": "A man is doing pull-ups", "hypothesis": "The man is doing exercises in a gym", "label": 1}
+{"premise": "A man is singing and playing a guitar", "hypothesis": "A man is singing and playing a musical instrument", "label": 0}
+{"premise": "Recruits are talking to an officer", "hypothesis": "An officer is talking to the recruits", "label": 1}
+{"premise": "Garlic is being chopped by a woman", "hypothesis": "A woman is chopping garlic", "label": 0}
+{"premise": "A woman is slicing a fish", "hypothesis": "There is no woman slicing a fish", "label": 2}
+{"premise": "A big cat is opening a plastic drawer with its paws and is jumping inside", "hypothesis": "A cat is opening a drawer and jumping inside", "label": 0}
+{"premise": "The man is talking on the telephone", "hypothesis": "The man is speaking on the telephone", "label": 0}
+{"premise": "A man is cutting onions", "hypothesis": "A woman is cutting an onion", "label": 1}
+{"premise": "A man is opening a door", "hypothesis": "There is no man opening a door", "label": 2}
+{"premise": "A door is being opened by a man", "hypothesis": "A man is cutting an onion", "label": 1}
+{"premise": "A woman is playing the violin", "hypothesis": "There is no man playing the piano", "label": 1}
+{"premise": "A chef is preparing some food", "hypothesis": "A chef is preparing a meal", "label": 0}
+{"premise": "Two sumo ringers are fighting", "hypothesis": "Two sumo wrestlers are fighting", "label": 0}
+{"premise": "Two sumo ringers are fighting", "hypothesis": "A man is riding a water toy in the water", "label": 1}
+{"premise": "A man is buttering a piece of bread", "hypothesis": "A woman is buttering a piece of bread", "label": 1}
+{"premise": "The woman is putting pasta into a dish", "hypothesis": "Pasta is being put into a dish by a woman", "label": 0}
+{"premise": "A woman is pulling some sticky goo out of a bowl", "hypothesis": "The woman is not putting pasta into a dish", "label": 1}
+{"premise": "There is no girl playing a flute", "hypothesis": "A girl is playing a flute", "label": 2}
+{"premise": "A large flute is being played by a man", "hypothesis": "A man is playing a flute", "label": 0}
+{"premise": "A man is playing a large flute", "hypothesis": "There is no man playing a flute", "label": 2}
+{"premise": "An octopus is being sliced by a woman", "hypothesis": "A woman is slicing an octopus", "label": 0}
+{"premise": "A man is playing a flute", "hypothesis": "A man is not playing a flute", "label": 2}
+{"premise": "A woman is playing the flute", "hypothesis": "A man is playing a flute", "label": 1}
+{"premise": "A woman is cutting a lemon", "hypothesis": "A woman is cutting fruit", "label": 0}
+{"premise": "A group of people are dancing in a show", "hypothesis": "A group of people are marching", "label": 1}
+{"premise": "A cupcake is being eaten by a girl", "hypothesis": "A girl is eating a cupcake", "label": 0}
+{"premise": "A person is eating in a restaurant", "hypothesis": "A person is making a bed", "label": 1}
+{"premise": "The cook is sprinkling cheese on the pizza", "hypothesis": "The man is sprinkling cheese on the pizza", "label": 1}
+{"premise": "A man is reloading a shotgun", "hypothesis": "A man is firing a shotgun", "label": 1}
+{"premise": "A tiger cub is playing with a ball", "hypothesis": "A baby is playing with a doll", "label": 1}
+{"premise": "A baby is playing with a toy", "hypothesis": "A baby tiger is playing with a ball", "label": 1}
+{"premise": "A person is peeling a potato", "hypothesis": "A potato is being peeled by a person", "label": 0}
+{"premise": "A man is rowing a canoe", "hypothesis": "A man is rowing a boat", "label": 0}
+{"premise": "A man and a woman are driving down the street in a jeep", "hypothesis": "A man and a woman are driving down the road in an open-air vehicle", "label": 1}
+{"premise": "A woman is pouring ingredients into a bowl", "hypothesis": "The chef is seasoning the oil", "label": 1}
+{"premise": "A horse is being ridden by a person", "hypothesis": "A person is riding a horse", "label": 0}
+{"premise": "A horse is being ridden by a person", "hypothesis": "A woman is slicing potatoes", "label": 1}
+{"premise": "The man is not doing exercises", "hypothesis": "The man is doing exercises", "label": 2}
+{"premise": "The man is not doing exercises", "hypothesis": "Two men are fighting", "label": 1}
+{"premise": "Vegetables are being put into a pot by a man", "hypothesis": "Someone is pouring ingredients into a pot", "label": 0}
+{"premise": "A dog is leaving a ball in the dirt", "hypothesis": "A dog is chasing a ball through dirt", "label": 1}
+{"premise": "There is no brown dog standing in the water", "hypothesis": "A dog with golden fur is in the water", "label": 1}
+{"premise": "A young girl in a blue shirt is walking on the sidewalk and holding up a pink sign", "hypothesis": "A young girl by a pink sign is holding up a blue shirt and is walking on the sidewalk", "label": 1}
+{"premise": "The small child is walking through the water and is being guided by another person", "hypothesis": "A young child is splashing in the water", "label": 1}
+{"premise": "A man and a woman are in a room painted beige, wearing dark colored shirts and a monitor is in the background", "hypothesis": "A man and a woman are in a beige room, wearing dark colored shirts and a monitor is in the background", "label": 0}
+{"premise": "A person wearing jeans is sitting happily on the top of a horse saddle", "hypothesis": "A woman in jeans is sitting on the saddle of a horse", "label": 1}
+{"premise": "A brown and white dog is holding a baseball in its mouth", "hypothesis": "A black and white dog is dropping a baseball from its mouth", "label": 1}
+{"premise": "A young boy wearing a red swimsuit is jumping into a blue kiddies pool", "hypothesis": "A boy wearing red shorts is jumping into a paddling pool", "label": 1}
+{"premise": "Two people are standing in the ocean and watching the sunset", "hypothesis": "Nobody is standing in the ocean and watching the sunset", "label": 2}
+{"premise": "A race car driver is standing up and pointing his hand at the sky", "hypothesis": "A race car driver is sitting down and is motionless", "label": 1}
+{"premise": "A race car driver is standing up and is fiercely pointing his hand at the sky", "hypothesis": "The person in the blue jacket is wearing a colorful helmet", "label": 1}
+{"premise": "A bicyclist is holding a bike over his head in a group of people", "hypothesis": "A cyclist is being held over the heads of a group of people with the bike", "label": 1}
+{"premise": "A man is sitting on a boat in font of the sunset, near a flag", "hypothesis": "A man is standing on a boat in front of the sunset near a flag", "label": 1}
+{"premise": "A man is standing on a boat in front of the sunset near a flag", "hypothesis": "A man is on a boat in front of the sunset", "label": 0}
+{"premise": "People at a drag race are running away from the flames that are coming out of the cars", "hypothesis": "The crowd is watching two racing cars that are leaving the starting line", "label": 1}
+{"premise": "Two dogs are playing together on the grass", "hypothesis": "Two dogs are resting together in the grass", "label": 1}
+{"premise": "A dog, which is black, is running in the grass", "hypothesis": "A black dog is running in the grass", "label": 0}
+{"premise": "A black dog is running in the grass and its tongue is hanging out", "hypothesis": "A black dog is running in the grass", "label": 0}
+{"premise": "A yellow dog is running on white snow on a very sunny day", "hypothesis": "A yellow dog is running on white snow on a sunny day", "label": 0}
+{"premise": "A girl is wearing jeans and a pink shirt and is running", "hypothesis": "A little boy in a pink shirt is running under a tree in the desert", "label": 1}
+{"premise": "A white dog is wearing a Christmas reindeer headband and is playing with a brown dog in the grass", "hypothesis": "The white reindeer wearing dog ears is near a brown reindeer", "label": 1}
+{"premise": "The woman in a red costume is leaning against a brick wall and playing an instrument", "hypothesis": "The woman in a red costume is not leaning against a brick wall and is not playing an instrument", "label": 2}
+{"premise": "A waterfall is flowing into a shallow pool", "hypothesis": "The people are walking on the road beside a beautiful waterfall", "label": 1}
+{"premise": "A dog is scattering a pack of white sheep on a dusty farm", "hypothesis": "A dog is herding a pack of white sheep on a dusty farm", "label": 1}
+{"premise": "A little boy is wearing a yellow tank top and is laughing", "hypothesis": "A laughing boy is in a yellow tank and is wearing a top", "label": 1}
+{"premise": "The person is not standing on white ice", "hypothesis": "A person is standing in a vast field of glacial ice", "label": 1}
+{"premise": "The ice hockey goalkeeper is wearing a yellow jersey and is defending the goal", "hypothesis": "There is no hockey player in a yellow jersey guarding the goal", "label": 2}
+{"premise": "A woman is wearing a blue helmet and is riding a bicycle in a parking lot", "hypothesis": "A woman is parking a blue bicycle and is wearing lots of riding helmets", "label": 1}
+{"premise": "A young girl is standing on one leg", "hypothesis": "A young female is dancing", "label": 1}
+{"premise": "A young girl is standing on one leg", "hypothesis": "A young girl is dancing", "label": 1}
+{"premise": "A bee is clinging to a yellow flower", "hypothesis": "There is no small bee landing on a bunch of yellow flowers", "label": 1}
+{"premise": "There is no white dog with beige spots running through a field", "hypothesis": "A tan dog is running through the brush", "label": 1}
+{"premise": "A hurdle is being leapt by a horse that has a rider on its back", "hypothesis": "A horse and its rider are leaping over a barrier", "label": 0}
+{"premise": "Two teenage girls are wearing fancy dresses at an event", "hypothesis": "Two girls in their teens are wearing fancy dresses at an event", "label": 0}
+{"premise": "A classroom full of students is looking attentively in the same direction inside a bamboo structure", "hypothesis": "A group of students in uniforms is listening attentively at the front of the class", "label": 1}
+{"premise": "A child, who is small, is outdoors climbing steps outdoors in an area full of grass", "hypothesis": "A small child is outdoors climbing steps in a grassy area", "label": 0}
+{"premise": "A little child in a pink sweater is climbing a concrete staircase", "hypothesis": "A small child is outdoors climbing steps in a grassy area", "label": 1}
+{"premise": "A kid in orange is playing outside with a snowball", "hypothesis": "A snow ball is being made by a child", "label": 1}
+{"premise": "The people are not sitting on a bench in front of a restaurant", "hypothesis": "Three people are sitting on a bench under some palm trees", "label": 1}
+{"premise": "A large brown dog and a small grey dog are standing on a rocky surface", "hypothesis": "A big brown dog and a small grey dog are standing on a rocky surface", "label": 0}
+{"premise": "Three boys are resting on rocks along a river", "hypothesis": "Three boys are walking on rocks along a river", "label": 1}
+{"premise": "There is no man dressed in black wearing an elaborate black mask", "hypothesis": "A man dressed in black is wearing an elaborate black mask", "label": 2}
+{"premise": "Two children, who are small, are playing with a toy car in the street", "hypothesis": "A father is pushing his daughter on a go-kart and another girl is watching", "label": 1}
+{"premise": "A golden dog is running through a field of tall grass", "hypothesis": "There is no brown dog running through tall green grass", "label": 1}
+{"premise": "The woman wearing the blue and white uniform with a white and blue hat is keeping her mouth open and is near others who are dressed in the same fashion", "hypothesis": "A woman is wearing a blue shirt with a white vest and a white cap and is talking and marching", "label": 1}
+{"premise": "The snowboarder is doing a flip over a mound of snow", "hypothesis": "Somebody is jumping in the air on a board", "label": 0}
+{"premise": "A blonde boy in green is sitting on a swing", "hypothesis": "There is no little girl with blond hair smiling and sitting on a swing", "label": 1}
+{"premise": "A white man is staging a hat and a playing guitar", "hypothesis": "A man in a white hat is playing guitar on stage", "label": 1}
+{"premise": "There is no man in a red uniform making a jump in a dirt bike race", "hypothesis": "A man in a red uniform is making a jump in a dirt bike race", "label": 2}
+{"premise": "Rugby players are not tackling each other", "hypothesis": "A soccer player is being tackled by his opponent", "label": 1}
+{"premise": "A white dog is standing on fallen leaves", "hypothesis": "A white dog is lying on fallen leaves", "label": 1}
+{"premise": "A child in clothing which is light colored is standing with his arms extended outward", "hypothesis": "A child in light colored clothing is standing with his arms extended outward", "label": 0}
+{"premise": "The boy and girl are not playing on a playground", "hypothesis": "The boy and girl are playing on the outdoor gym", "label": 1}
+{"premise": "The motocross rider is standing naked", "hypothesis": "A biker with a blue jacket, black pants and a white helmet is driving on dirt and people are watching", "label": 1}
+{"premise": "The rider on the blue and black motocross bike is not wearing the pants", "hypothesis": "A biker with a blue jacket, black pants and a white helmet is driving on dirt and people are watching", "label": 1}
+{"premise": "A trick is being performed by a rollerblader on a ramp", "hypothesis": "A rollerblader is performing a trick on a ramp", "label": 0}
+{"premise": "A group of football players is standing still in the field", "hypothesis": "The crowd is watching a football game", "label": 1}
+{"premise": "The group of people is standing together and looking at the camera", "hypothesis": "A group of people is standing together and looking at the camera", "label": 0}
+{"premise": "A brown dog is running across the yard with a toy in its mouth", "hypothesis": "There is no brown dog running across the yard with a toy in its mouth", "label": 2}
+{"premise": "There is no young boy jumping in the air with his knees bent and arms spread", "hypothesis": "A person with a green shirt is jumping high over the grass", "label": 1}
+{"premise": "A cigarette is being smoked by the man in the straw hat", "hypothesis": "A man is wearing a straw hat and smoking a cigarette", "label": 0}
+{"premise": "A man is wearing a blue shirt which has long sleeves and jeans and is riding a unicycle down a street", "hypothesis": "A man is wearing a blue checkered shirt and riding a unicycle in the street", "label": 1}
+{"premise": "Small children are climbing a statue in a park", "hypothesis": "Two children are playing on a statue", "label": 1}
+{"premise": "A tower is being looked at by a blonde lady", "hypothesis": "A woman is looking at the view of a city", "label": 1}
+{"premise": "A man is standing on the top of the rocks with clouds behind them", "hypothesis": "Somebody is standing on a mountain top", "label": 1}
+{"premise": "A child is smiling at the camera and swimming underwater", "hypothesis": "A child is swimming underwater in a pool", "label": 1}
+{"premise": "An American footballer is wearing the red and white strip", "hypothesis": "A football player is wearing black armbands", "label": 1}
+{"premise": "The little girl is swinging and the woman is standing behind her", "hypothesis": "The girl, who is little, is swinging and the woman is standing behind", "label": 0}
+{"premise": "A small child is showing excitement on a swing set at the park", "hypothesis": "The girl, who is little, is swinging and the woman is standing behind", "label": 1}
+{"premise": "A surfer is riding the wave", "hypothesis": "A man is falling off a surfboard in the water", "label": 1}
+{"premise": "The group of people is sitting in a dim room", "hypothesis": "The group of people is sitting in a room which is dim", "label": 0}
+{"premise": "A man and two women in a dark room are sitting at a table with candles", "hypothesis": "The group of people is sitting in a dim room", "label": 0}
+{"premise": "A man and two women in a darkened room are sitting at a table with candles", "hypothesis": "The group of dim people is sitting in a room", "label": 1}
+{"premise": "A man in a white shirt and sunglasses and a man in a black shirt and sunglasses are sitting at a table with four bottles of beer", "hypothesis": "A man in a white shirt and sunglasses and a man in a black shirt and sunglasses are sitting at a table with four beer bottles", "label": 0}
+{"premise": "The woman is not wearing a red jacket and is not holding a glass in front of the man in a white t-shirt", "hypothesis": "A person is wearing a red jacket and holding a beer", "label": 1}
+{"premise": "A child is watching someone playing outdoors and is spouting water over the rest of his family", "hypothesis": "A boy is holding a hose next to a man and another boy is watching", "label": 1}
+{"premise": "There is no football player in a purple jersey running with the ball for a touchdown", "hypothesis": "A football player is running past an official carrying a football", "label": 1}
+{"premise": "A football player is carrying an official past a rolling football", "hypothesis": "A football player in a purple jersey is running with the ball for a touchdown", "label": 1}
+{"premise": "A young girl in a blue leotard is jumping in the air", "hypothesis": "A young girl in a leotard colored in blue is jumping in the air", "label": 0}
+{"premise": "The young girl in blue is jumping in the air", "hypothesis": "A young girl in blue is jumping in the air", "label": 0}
+{"premise": "The bunch of men are playing rugby on a field full of mud", "hypothesis": "Some men are playing rugby", "label": 0}
+{"premise": "A person is looking at a bike designed for motocross that is lying on its side and another is racing by", "hypothesis": "The bike rider is looking at an accident of another bike rider", "label": 1}
+{"premise": "There is no little boy wearing a green soccer strip and running on the grass", "hypothesis": "A little boy is wearing a green soccer strip and is running on the grass", "label": 2}
+{"premise": "The man at the beach is not doing a handstand on the wet sand at the edge of the water", "hypothesis": "The man is doing a handstand on the wet sand at the edge of the water at the beach", "label": 2}
+{"premise": "A young mother is playing with her boy in the park", "hypothesis": "A young boy is playing in the park with his mother", "label": 0}
+{"premise": "A man is spraying a super soaker into the mouth of a dog", "hypothesis": "There is no man spraying a super soaker into the mouth of a dog", "label": 2}
+{"premise": "There is no man spraying a super soaker into the mouth of a dog", "hypothesis": "A man is squirting water into the mouth of a white dog with a squirt gun", "label": 1}
+{"premise": "A boy under an umbrella is being held by his father who is wearing a blue coat", "hypothesis": "A boy, who is wearing a blue coat, is being held by his father under an umbrella", "label": 1}
+{"premise": "A boy under an umbrella is being held by his father who is wearing a blue coat", "hypothesis": "A child is experiencing a new world", "label": 1}
+{"premise": "A dog is playing alone on a beach covered by snow", "hypothesis": "A dog is walking along a snowdrift", "label": 1}
+{"premise": "A surfer is riding a big wave across dark green water", "hypothesis": "The surfer is riding a small wave", "label": 2}
+{"premise": "A tennis player is lunging to the left", "hypothesis": "A tennis player is jumping to the left", "label": 0}
+{"premise": "Two dogs are looking at something that is splashing in the water", "hypothesis": "Some dogs are not playing in a stream", "label": 1}
+{"premise": "A man in a blue cowboy hat is riding a white horse", "hypothesis": "A man in blue is riding a horse on a dirt road", "label": 1}
+{"premise": "Two white dogs are playing with a brown dog and a tennis ball", "hypothesis": "Two white dogs are playing with a brown dog and a ball", "label": 0}
+{"premise": "A person in a pink jacket is running onto the field", "hypothesis": "Four athletes are with a woman in a crowded stadium", "label": 1}
+{"premise": "A woman dressed in elegant clothing is inside a crowd of people and is looking up", "hypothesis": "A woman dressed in elegant clothing is inside a crowd of people and is looking down", "label": 1}
+{"premise": "An Asian woman is holding a fur scarf", "hypothesis": "An elegant woman is inside a crowd of people and is looking down", "label": 1}
+{"premise": "A kid in a white t-shirt is splashing in shallow water", "hypothesis": "A boy is running through the water at the beach", "label": 1}
+{"premise": "A girl is running through the water at the beach", "hypothesis": "A boy in a white t-shirt is splashing in shallow water", "label": 1}
+{"premise": "A boy in a white t-shirt is splashing in shallow water", "hypothesis": "A boy is running through the water at the beach", "label": 1}
+{"premise": "The kids are not wearing suits and water is splashing around", "hypothesis": "Children in swimming suits are playing in the water", "label": 1}
+{"premise": "A young girl is wearing a blue patterned swim suit, a black and yellow swim cap and has blue swimming goggles on her head", "hypothesis": "A little girl is wearing a blue patterned swim suit, a black and yellow swim cap and has blue swimming goggles on the head", "label": 0}
+{"premise": "A female cheerleader is sitting on the knee of a male cheerleader", "hypothesis": "Some cheerleaders are relaxing", "label": 1}
+{"premise": "The girl has red hair and eyebrows, several piercings in a ear and a drawing on the back", "hypothesis": "The girl has red hair and eyebrows, several piercings in a ear and a tattoo on the back", "label": 0}
+{"premise": "The girl has red hair and eyebrows, several piercings in a ear and no tattoo on the back", "hypothesis": "A girl with red hair and red eyebrows is in midspeech", "label": 1}
+{"premise": "Two people are driving a jeep and a lady is sitting on the top of it", "hypothesis": "Two people are driving a jeep and a girl is sitting on the top of it", "label": 0}
+{"premise": "The adults and children are not gathered near an outdoor seating arrangement", "hypothesis": "The adults and children are being gathered near an outdoor seating arrangement", "label": 2}
+{"premise": "A girl has colored patches on the cheeks", "hypothesis": "A girl is standing in a group and is wearing a black shirt and pink beads", "label": 1}
+{"premise": "Two dogs are running through water", "hypothesis": "Two dogs are running through high grass", "label": 1}
+{"premise": "Some people and vehicles are on a crowded street", "hypothesis": "Some people and vehicles are on a almost empty street", "label": 2}
+{"premise": "A young girl with painted face is standing next to some other children", "hypothesis": "Children are being dressed in costumes and playing a game", "label": 1}
+{"premise": "There is no bmx biker jumping dirt ramps in front of a body of water", "hypothesis": "Two bmx bikers are jumping dirt ramps in front of a body of water", "label": 2}
+{"premise": "A man is doing a trick on a skateboard", "hypothesis": "A person is doing a trick on a skateboard", "label": 0}
+{"premise": "A man in a motocross uniform is wearing a helmet and rides a red motorcycle", "hypothesis": "A person in a motocross uniform is wearing a helmet and rides a red motorcycle", "label": 0}
+{"premise": "A boy in a striped shirt is jumping behind a water fountain", "hypothesis": "A boy in a striped shirt is jumping in front of a water fountain", "label": 1}
+{"premise": "Two large dogs, a light colored one and a dark one, are sleeping on a snowy terrain", "hypothesis": "Two dogs are leaping through snowy grass and rocks", "label": 1}
+{"premise": "A girl in blue is sliding down a green slide", "hypothesis": "The young girl in blue is enjoying a slide", "label": 0}
+{"premise": "A white man is walking next to a building in a big city", "hypothesis": "A black man is walking next to a building in a big city", "label": 1}
+{"premise": "A man with no hat is sitting on the ground", "hypothesis": "A man with a backwards hat is sitting on the ground", "label": 1}
+{"premise": "A girl in blue sweater is holding a multicolor toy and is sitting on the shoulders of an old man with grey hair", "hypothesis": "A girl in blue sweater is holding a multicolor toy and is sitting on the shoulders of a man with grey hair", "label": 0}
+{"premise": "The man is going into the water", "hypothesis": "The person is going into the sea", "label": 1}
+{"premise": "Two people are sitting on a park bench on a sunny day", "hypothesis": "Two people are sitting on a park bench on a hot day", "label": 1}
+{"premise": "The child is splashing water in a big red pool", "hypothesis": "A toddler is making a splash inside a blue paddling pool", "label": 1}
+{"premise": "A grey silky dog is lying in the grass and a brown dog is looking on", "hypothesis": "The brown dog is spotting a black dog lying in the dry grass", "label": 1}
+{"premise": "A black dog and a small white and black dog are looking up at a kitchen countertop", "hypothesis": "A large dog and a small dog are standing next to the kitchen counter and are investigating", "label": 0}
+{"premise": "A man is not rock climbing and a city and a bay are in the background", "hypothesis": "A man is rock climbing and a city and a bay are in the background", "label": 2}
+{"premise": "A man is rock climbing, pausing and calculating the route", "hypothesis": "A man is rock climbing, stopping and calculating the route", "label": 0}
+{"premise": "No group of people is gathering at a stand at the fair", "hypothesis": "The people are standing at a carnival", "label": 1}
+{"premise": "A group of rollerbladers is lining up on the street", "hypothesis": "A group of rollerbladers is lining up on the road", "label": 0}
+{"premise": "A skateboarder is jumping off a ramp", "hypothesis": "A skateboarder is making a jump off a ramp", "label": 0}
+{"premise": "A black and orange bird is standing in the grass", "hypothesis": "The black bird with a yellow beak is standing in the green grass", "label": 1}
+{"premise": "Two white dogs are quickly running together", "hypothesis": "Two white dogs are running together", "label": 0}
+{"premise": "A group of people are standing around a sound mixing table", "hypothesis": "Some people is looking at sound equipment", "label": 0}
+{"premise": "A girl is skipping rope on a sidewalk", "hypothesis": "A girl is skipping rope on near a street", "label": 0}
+{"premise": "A girl is jumping rope on a sidewalk near a parking garage", "hypothesis": "A girl is skipping rope on near a street", "label": 1}
+{"premise": "A dog is swimming in a body of water", "hypothesis": "An animal is swimming in a body of water", "label": 0}
+{"premise": "A woman is leaning on the ledge of a balcony", "hypothesis": "A man is leaning on the ledge of a balcony", "label": 1}
+{"premise": "A small white dog is running across a lawn", "hypothesis": "A big white dog is running across a lawn", "label": 1}
+{"premise": "The dog is on a leash and is walking near the water", "hypothesis": "A black dog on a leash is walking in the water", "label": 1}
+{"premise": "One boy in orange shorts is standing on a rock cliff over the water and the other boy in black shorts is jumping of it into the water", "hypothesis": "Two males are standing on a cliff edge and one is jumping into the water", "label": 1}
+{"premise": "A small group of people are standing and two are sitting on the sofa", "hypothesis": "A group of five young adults are lounging indoors", "label": 1}
+{"premise": "A young girl in a bikini is jumping on the beach", "hypothesis": "A young girl in swimming suite is jumping on the beach", "label": 0}
+{"premise": "A blond child is going down a slide and throwing up his arms", "hypothesis": "A child with dark hair is going down a slide and throwing up his arms", "label": 2}
+{"premise": "Two dogs are playing in a forest", "hypothesis": "A brown dog is running after a black dog on a rocky shore", "label": 1}
+{"premise": "A white dog is approaching a golden dog on pebbly beach", "hypothesis": "Two dogs are playing on a rocky beach", "label": 1}
+{"premise": "Two young girls are wearing hats and sticking their colored tongues out", "hypothesis": "Two kids are sticking out blue and green colored tongues", "label": 1}
+{"premise": "Two boys are laying in the ocean close to the beach", "hypothesis": "Two boys are laying in the water close to the beach", "label": 0}
+{"premise": "A large man is sitting in a military accessories store", "hypothesis": "A veteran is showing different things from a war to some people", "label": 1}
+{"premise": "A dog with a blue collar is playing with the ball outside", "hypothesis": "A grey dog is bouncing a soccer ball on its head in a grass field", "label": 1}
+{"premise": "A young woman with Indian clothing and henna on her hand is going through paperwork", "hypothesis": "A woman is wearing a colorful shirt and a lot of jewelry", "label": 1}
+{"premise": "A man in a jersey which is black is standing in a gym", "hypothesis": "A man in a black jersey is standing in a gym", "label": 0}
+{"premise": "A man in a black jersey is standing in a gym", "hypothesis": "A man is standing in a gym and is wearing a jersey", "label": 0}
+{"premise": "A little brown and white dog is running on the sidewalk", "hypothesis": "A little brown and white dog is running on the road", "label": 1}
+{"premise": "A dog is turning on the grass and pursuing a flying tennis ball", "hypothesis": "A yellow dog is chasing a ball", "label": 1}
+{"premise": "A woman in blue jeans is standing in front of a group of children beside a stone built house", "hypothesis": "No lady is standing on the street and is surrounded by school children", "label": 1}
+{"premise": "A lady is standing on the street and is surrounded by school children", "hypothesis": "A man in blue jeans is standing in front of a group of children beside a stone built house", "label": 1}
+{"premise": "A guy is leaping into the air in wood", "hypothesis": "A guy is leaping into the air in a wooded area", "label": 1}
+{"premise": "A dog is running with a ball", "hypothesis": "The black dog is carrying a blue and white ball in its mouth", "label": 1}
+{"premise": "The man in blue is posing for a picture next to a vehicle", "hypothesis": "A man is standing at the wheel of a classic American car that has its door and trunk open", "label": 1}
+{"premise": "A man is skiing down a hill and jumping a red obstacle", "hypothesis": "A man is snowboarding down a railing in the snow", "label": 1}
+{"premise": "The skateboarder is jumping in the air", "hypothesis": "A skateboarder is jumping in the air", "label": 0}
+{"premise": "A snowboarder is grinding down a long concrete rail", "hypothesis": "A person is doing acrobatics on a snowboard", "label": 1}
+{"premise": "A group of people is walking down the street and a person in a green hat is on the phone", "hypothesis": "Four people are walking along a city sidewalk and the one in the green hat is phoning someone", "label": 1}
+{"premise": "A surfer is surfing a big wave", "hypothesis": "A surfer is surfing a huge wave", "label": 0}
+{"premise": "A person with a red hooded jacket and a black backpack is walking near a rocky wall", "hypothesis": "A man in a red jacket and khaki pants is walking through an European state", "label": 1}
+{"premise": "The players is maneuvering for the soccer ball", "hypothesis": "A man in green is kicking a soccer ball and a man in purple and white is rising up", "label": 1}
+{"premise": "The man dressed in leather chaps and a purple shirt is standing in front of someone lookers", "hypothesis": "A man is wearing a purple shirt and black leather chaps and is posing for the camera", "label": 1}
+{"premise": "A dog is in a sandy area with the sand that is being stirred up into the air and several plants are in the background", "hypothesis": "A dog is in the sand that is blowing in the air", "label": 1}
+{"premise": "No dog is in the sand that is blowing in the wind", "hypothesis": "A dog is in a sandy area with the sand that is being stirred up into the air and several plants are in the background", "label": 2}
+{"premise": "The black and white dog is running in a green yard", "hypothesis": "A black and white dog is running outdoors", "label": 0}
+{"premise": "A dog is jumping into the air in the country", "hypothesis": "A dog is jumping in the shade of some trees", "label": 1}
+{"premise": "A dog is jumping in the shade of some trees", "hypothesis": "A cat is jumping high into the air in the country", "label": 1}
+{"premise": "A cluster of four brown dogs are playing in a field of brown grass", "hypothesis": "Four dogs are not playing in a grassy area", "label": 2}
+{"premise": "A big brown and white spotted dog is lying on a jacket on the street", "hypothesis": "The dog is having a nap in the park", "label": 1}
+{"premise": "A man on a yellow sport bike is doing a wheelie and a friend on a black bike is catching up", "hypothesis": "The rider dressed in orange is driving a motorcycle on one wheel", "label": 1}
+{"premise": "An elder man is sitting on a bench and is wearing a gray jacket and black pants", "hypothesis": "An elderly man is sitting on a bench", "label": 0}
+{"premise": "The woman is holding the paintbrush next to the artist's easel", "hypothesis": "The lady is holding the paintbrush next to the artist's easel", "label": 0}
+{"premise": "A man is wearing a blue shirt and walking barefoot on a tennis court", "hypothesis": "A woman is wearing a blue shirt and walking barefoot on a tennis court", "label": 1}
+{"premise": "The young girl is playing on the edge of a fountain and an older woman is watching her", "hypothesis": "A young girl is playing on the edge of a fountain and an older woman is watching her", "label": 0}
+{"premise": "A young girl is playing on the edge of a fountain and an older woman is watching her", "hypothesis": "A little girl and a woman wearing a yellow shirt are getting splashed by a city fountain", "label": 1}
+{"premise": "A black and white dog with a large branch is standing in the field", "hypothesis": "A black and white dog with a large branch is running in the field", "label": 2}
+{"premise": "A black and white dog is carrying a huge stick on the green grass", "hypothesis": "A black and white dog with a large branch is running in the field", "label": 0}
+{"premise": "A boy is running through the sand", "hypothesis": "A boy wearing a striped shirt is running barefoot on the sandy hill", "label": 1}
+{"premise": "Two young boys are looking up at the camera and one is sticking out his tongue", "hypothesis": "The little boy is sticking his tongue out for the camera and another boy is looking on", "label": 1}
+{"premise": "A little boy is sticking his tongue out for the camera and another boy is looking on", "hypothesis": "Two kids are looking up at the camera and one is sticking out his tongue", "label": 0}
+{"premise": "A laughing child is holding a water gun and getting sprayed with water", "hypothesis": "A person in a blue jacket is jumping onto a tall cement wall", "label": 1}
+{"premise": "A person is slicing some mushrooms", "hypothesis": "The elephant is being ridden by the woman", "label": 1}
+{"premise": "Two small children are playing with a toy car in the street", "hypothesis": "A dog is running through a field and is chasing a toy", "label": 1}
+{"premise": "A man is playing an electric guitar", "hypothesis": "A group of people is holding drinks and pointing at the camera", "label": 1}
+{"premise": "A girl in gold and purple is holding a rainbow afghan", "hypothesis": "A man is squatting in brush and taking a photo", "label": 1}
+{"premise": "Two people are riding a bike", "hypothesis": "A practicing jumper is tossing a person's snowboard into the air", "label": 1}
+{"premise": "Some instruments are being played by a band", "hypothesis": "A young, topless woman is covered in paint", "label": 1}
+{"premise": "A family is buying something at the vending machine", "hypothesis": "A man in a suit is standing at a microphone and singing", "label": 1}
+{"premise": "A bike is being ridden over a monkey", "hypothesis": "A person is riding a dirt bike down a dirt hill", "label": 1}
+{"premise": "A biker is riding away from a fence", "hypothesis": "A man is dancing on the road", "label": 1}
+{"premise": "A woman is playing an electric guitar", "hypothesis": "A kid is playing guitar", "label": 1}
+{"premise": "The animal is grazing on the grass", "hypothesis": "The cop is sitting on a police bike", "label": 1}
+{"premise": "The dog is snapping at some droplets of water", "hypothesis": "A girl in a band is playing an instrument", "label": 1}
+{"premise": "A young man is pushing a motocross bike down a dirt hill", "hypothesis": "A dog is swimming after a tennis ball", "label": 1}

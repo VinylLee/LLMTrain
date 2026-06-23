@@ -26,6 +26,7 @@ def test_deepseek_connection():
 
     # 对于LM Studio，使用LMSTUDIO配置；对于DeepSeek，使用DEEPSEEK配置
     api_key = os.getenv("LMSTUDIO_API_KEY") or os.getenv("DEEPSEEK_KEY")
+    
     api_url = os.getenv("LMSTUDIO_BASE_URL") or os.getenv("DEEPSEEK_OPENAI_BASE_URL")
     model = os.getenv("LMSTUDIO_QWEN") or os.getenv("DEEPSEEK_V4_FLASH") or "qwen3.6"
 
