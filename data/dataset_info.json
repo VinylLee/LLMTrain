@@ -1,0 +1,10 @@
+{
+  "test_lora": {
+    "file_name": "test_lora_train.json",
+    "formatting": "alpaca",
+    "columns": {
+      "prompt": "instruction",
+      "response": "output"
+    }
+  }
+}
