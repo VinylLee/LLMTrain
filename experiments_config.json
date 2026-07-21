@@ -17,19 +17,6 @@
       }
     },
     {
-      "name": "mettrain_rte_2490_gemma3_4b",
-      "train_data": "data/nli/mettrain/rte_lr0.8_gemma-3-4b-it-qat/augmented_data.json",
-      "target": 2490,
-      "task_type": "nli-binary",
-      "ft_params": {
-        "lr": 3e-4,
-        "epochs": 3.0,
-        "rank": 8,
-        "batch": 4,
-        "grad_accum": 8
-      }
-    },
-    {
       "name": "mettrain_sick_4439_gemma3_4b",
       "train_data": "data/nli/mettrain/sick_lr1.0_gemma-3-4b-it-qat/augmented_data.json",
       "target": 4439,
@@ -72,19 +59,6 @@
       "train_data": "data/nli/original_dataset/mnlim/train.json",
       "target": 4413,
       "task_type": "nli",
-      "ft_params": {
-        "lr": 3e-4,
-        "epochs": 3.0,
-        "rank": 8,
-        "batch": 4,
-        "grad_accum": 8
-      }
-    },
-    {
-      "name": "original_rte_2490_gemma3_4b",
-      "train_data": "data/nli/original_dataset/rte/train.json",
-      "target": 2490,
-      "task_type": "nli-binary",
       "ft_params": {
         "lr": 3e-4,
         "epochs": 3.0,

@@ -11,7 +11,7 @@
 - 通用 OpenAI 兼容 API 的模型推理、评估与 MRV 报告流程；
 - 以 Gemma-3-4B 和 Llama-3.2-3B-Instruct 为基座、通过 LLaMA Factory/PEFT 进行 LoRA 微调的系统化三种子实验流程。
 
-研究任务主要是三分类 NLI（entailment、neutral、contradiction），RTE 单独按二分类（entailment、not_entailment）处理。
+研究任务目前聚焦三分类 NLI（entailment、neutral、contradiction）。RTE（二分类）实验已从主配置中移除。
 
 ## 2. 总体数据流
 
@@ -144,14 +144,27 @@ python scripts/run_batch_experiments.py \
 
 负责：
 
-- 从逐行 JSON 读取 `premise`、`hypothesis`、`label`；
-- 通过路径包含 `rte` 自动判断二分类，也可用 `--binary` 强制指定；
-- 转成 Alpaca 结构：`instruction`、`input`、`output`；
-- 默认打乱数据，批量流程用 5% 作为验证集；
-- 生成 `full_train.json` 和 `full_val.json`；
-- 更新 `data/dataset_info.json` 的 LLaMA Factory 数据集注册。
+- 从逐行 JSON 读取 `premise`、`hypothesis`、`label`、`pair_id`、`mr_id` 等字段；
+- 支持多种 `--mr-instruction-mode`：`none`、`operation_only`、`pair_only`、`pair_operation`（主实验）、`shuffled_operation`（负对照）、`relation_aware`、`full_oracle`；
+- MR 操作描述与关系效果使用独立的字典结构，主实验不读取关系效果；
+- 验证集始终使用普通 NLI instruction（mode=none），避免标签泄漏；
+- **按 `pair_id` group 拆分** train/validation，同一 pair 的所有样本不会跨 split；
+- 支持 `--split-manifest` / `--write-split-manifest`：同一 cohort 的不同 instruction 变体复用相同的 train/validation 划分；
+- `--strict-pairing` 模式：未知 `mr_id`、增强样本缺 source、多 source group 等直接报错；
+- 输出 `conversion_report.json`，包含样本数、group 数、MR 分布、标签分布、fallback 统计等；
+- 自动判断二分类的 `--binary` 参数保留但标记为已弃用（RTE 已从主实验移除）。
 
-这里生成的 `.json` 文件内容仍是 JSONL，而不是 JSON 数组。标签命名同时存在于转换脚本、测试脚本和评估脚本；修改时必须同步检查。
+转换结果格式：
+
+```json
+{
+  "instruction": "Reference sample:\nPremise: \"...\"\nHypothesis: \"...\"\n\nTransformation applied...",
+  "input": "Premise: ...\nHypothesis: ...",
+  "output": "entailment"
+}
+```
+
+当前 P/H 只出现在 `input` 字段，不出现在 `instruction`。主实验（`pair_operation`）的 instruction 不包含原始标签、不包含 `mr_id` 原始名称、不包含 relation effect 文本。
 
 #### `scripts/run_finetune.py`
 
@@ -173,9 +186,9 @@ python scripts/run_batch_experiments.py \
 - 二分类模型测试三分类数据时，将 neutral/contradiction 折叠为 not_entailment；
 - Original 测试加载单一规范数据文件；
 - MR 测试将某数据集目录下所有 `.json` 文件合并后整体评估；
-- 输出每条样本的 `index`、`gold`、`pred` 和 `correct`。
+- 输出每条样本的丰富元数据，包括 `dataset`、`test_type`、`mr_type`、`pair_id`、`premise`、`hypothesis`、`gold`、`pred` 和 `correct`。
 
-当前系统结果位置：
+结果位置：
 
 ```text
 output/experiments/<experiment>_seed<seed>/tests/
@@ -183,7 +196,22 @@ output/experiments/<experiment>_seed<seed>/tests/
   mr/{mnlim,mnlimm,sick,snli}.jsonl
 ```
 
-当前输出没有保存原输入、`pair_id` 或 `mr_type`。虽然加载 MR 时构造了 `mr_types`，它没有写入结果；因此系统实验现有文件只能可靠统计“每个数据集的 MR 总体准确率”，不能回溯单个 MR 类型。若论文需要逐 MR 分析，应先修改输出结构再重测。
+每条结果示例：
+
+```json
+{
+  “index”: 1,
+  “dataset”: “snli”,
+  “test_type”: “mr”,
+  “mr_type”: “synonym_replacement”,
+  “pair_id”: “...”,
+  “premise”: “...”,
+  “hypothesis”: “...”,
+  “gold”: “entailment”,
+  “pred”: “neutral”,
+  “correct”: false
+}
+```
 
 #### `scripts/test_ft_model.py`
 
@@ -355,10 +383,9 @@ accuracy = correct 为 true 的条目数 / 非空且可解析结果条目总数
 - `.gitignore` 有“Secrets/Data/Output”标题，但当前可见内容没有对应的明确忽略规则，需要先决定哪些研究数据和结果应版本化；
 - `test_llm.py` 与 `test_deepseek.py` 重复度高；多个旧测试/微调入口与当前批量入口并存；
 - 多个脚本硬编码 `/home/ubuntu/LLMTrain/LLMTrain`，仓库不可直接迁移；
-- 批量脚本头部示例和注释仍写“8 个实验、5 个测试集”，实际配置是 9 个实验、4 个测试集；
+- 批量脚本头部示例和注释仍写”8 个实验、5 个测试集”，实际配置是 9 个实验、4 个测试集；
 - 采样以完整 `pair_id` 组为单位，因此实际训练条数可超过配置 target；
 - `convert_nli_to_ft.py` 的 `--shuffle` 使用 `store_true` 且默认已经为 true，当前 CLI 无法关闭打乱；
-- 当前系统 MR 结果丢失 `mr_type`，无法直接做逐 MR 统计；
 - 数据目录包含大量带模型名、阈值、随机后缀和 `old` 的实验变体；
 - `output/experiments/` 有 `SUMMARY.md`、`result.md`、`RESULTS.md` 多份汇总，口径不完全一致；
 - 根目录存在名为 `claude --resume b0643a76-674f-4aa7-912a-947998144148` 的可疑文件，可能是误创建，但删除前需用户确认；
@@ -371,17 +398,22 @@ accuracy = correct 为 true 的条目数 / 非空且可解析结果条目总数
 - ✅ Llama-3.2-3B-Instruct 7 组 × 3 seeds 微调和测试（2026-07-20 ~ 2026-07-21，21/21 实验全通过）；
 - ✅ Llama 与 Gemma 同 seed 配对差值表已生成（见 `COMPARISON_vs_Gemma.md`）；
 - ✅ `scripts/run_batch_experiments.py` 增强：支持 `--result-file`、`--progress-file`、按阶段执行、零写入 dry-run；
-- ✅ `scripts/summarize_seed_experiments.py` 新增：从逐行 `correct` 重算三种子聚合、标准差、模型间对比。
+- ✅ `scripts/summarize_seed_experiments.py` 新增：从逐行 `correct` 重算三种子聚合、标准差、模型间对比；
+- ✅ `scripts/convert_nli_to_ft.py` 重构：纯函数拆分、group-aware split、7 种 MR instruction mode、strict pairing、conversion report、split manifest；
+- ✅ `scripts/test_mettrain_experiment.py` 增强：输出每条样本的 `mr_type`、`pair_id`、`premise`、`hypothesis` 等丰富元数据；
+- ✅ `scripts/run_batch_experiments.py` 更新：MR mode 传播、cohort-based manifest 共享、experiment meta 扩展；
+- ✅ RTE 已从实验配置和测试脚本中移除；
+- ✅ `tests/test_convert_nli_to_ft.py` 新增 23 个单元测试覆盖 split、instruction、strict 模式。
 
 ## 10. 后续工作建议
 
 建议按以下优先级继续：
 
-1. 决定 RTE 的测试口径：加入 RTE 测试集，或明确只用二分类训练模型跨测四个三分类数据集；
-2. 完成或明确取消 RTE 三种子系统实验，并为二分类结果单独成表；
-3. 在系统测试输出中保留 `mr_type`、源文件和原始样本标识；
+1. ~~决定 RTE 的测试口径~~ ✅ RTE 已从实验配置和测试脚本中移除；
+2. ~~完成或明确取消 RTE 三种子系统实验~~ ✅ RTE 实验已删除；
+3. ~~在系统测试输出中保留 `mr_type`、源文件和原始样本标识~~ ✅ 测试输出已包含完整元数据；
 4. 合并或标记 `output/experiments/` 中三份汇总文件的用途，并统一标准差口径；
-5. 为采样、转换、断点恢复和结果汇总补单元测试；
+5. ~~为采样、转换、断点恢复和结果汇总补单元测试~~ ✅ `tests/test_convert_nli_to_ft.py` 已覆盖转换流程；
 6. 补齐训练环境锁定文件，或把 API 与训练依赖分成两个 requirements；
 7. 经确认后清理误创建文件、缓存和明确无用的重复入口；
 8. 论文中报告三种子结果时，同时说明 Original/MR 测试集规模与标准差口径。

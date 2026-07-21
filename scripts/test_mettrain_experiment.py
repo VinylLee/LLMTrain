@@ -1,13 +1,9 @@
 #!/usr/bin/env python3
 """
 测试微调后的 LoRA 模型：
-  - 5 个 Original 数据集
-  - 5 个 MR 数据集（聚合所有 MR 类型）
+  - Original 数据集
+  - MR 数据集（聚合所有 MR 类型）
 保存 JSONL 结果到 output/experiments/<name>/tests/{original,mr}/
-
-用法:
-  python scripts/test_mettrain_experiment.py \
-    --experiment rte_mettrain_equ_v2_gemma3_4b
 """
 import json, os, sys, time, torch, logging
 from pathlib import Path
@@ -25,7 +21,6 @@ os.chdir(WORK_DIR)
 
 # 原始数据集配置
 ORIGINAL_DATASETS = {
-    "rte":    {"dir": "original_dataset/rte",    "file": "test.json",      "task": "binary", "labels": {0:"entailment", 1:"not_entailment"}},
     "snli":   {"dir": "original_dataset/snli",   "file": "test.json",      "task": "3class",  "labels": {0:"entailment", 1:"neutral", 2:"contradiction"}},
     "mnlim":  {"dir": "original_dataset/mnlim",  "file": "test.json",      "task": "3class",  "labels": {0:"entailment", 1:"neutral", 2:"contradiction"}},
     "mnlimm": {"dir": "original_dataset/mnlimm", "file": "test.json",      "task": "3class",  "labels": {0:"entailment", 1:"neutral", 2:"contradiction"}},
@@ -34,7 +29,6 @@ ORIGINAL_DATASETS = {
 
 # MR 测试数据集配置
 MR_DATASETS = {
-    "rte":    {"dir": "MR_testing/rte_test_MR",    "task": "binary", "labels": {0:"entailment", 1:"not_entailment"}},
     "snli":   {"dir": "MR_testing/snli_test_MR",   "task": "3class", "labels": {0:"entailment", 1:"neutral", 2:"contradiction"}},
     "mnlim":  {"dir": "MR_testing/mnlim_test_MR",  "task": "3class", "labels": {0:"entailment", 1:"neutral", 2:"contradiction"}},
     "mnlimm": {"dir": "MR_testing/mnlimm_test_MR", "task": "3class", "labels": {0:"entailment", 1:"neutral", 2:"contradiction"}},
@@ -173,7 +167,8 @@ def collapse_label(gold_label, dataset_task, model_task):
 
 
 def test_dataset(model, tokenizer, samples, ds_name, dataset_task, labels,
-                 output_path, max_samples=None, model_task=None, batch_size=32):
+                 output_path, max_samples=None, model_task=None, batch_size=32,
+                 test_type="original", mr_types=None):
     """测试一个数据集（批量推理），保存 JSONL 结果。
 
     Args:
@@ -181,6 +176,8 @@ def test_dataset(model, tokenizer, samples, ds_name, dataset_task, labels,
                     None 表示与 dataset_task 相同（常规评估）。
                     不同时触发标签折叠和跨任务 prompt。
         batch_size: 批量推理大小，0 或负数表示逐条（兼容旧逻辑）。
+        test_type: "original" 或 "mr"。
+        mr_types: list[str] 与 samples 等长，每个样本的 MR 类型（仅 test_type="mr" 时）。
     """
     effective_task = model_task or dataset_task
     prompt_template = BINARY_PROMPT if effective_task == "binary" else CLASS3_PROMPT
@@ -214,12 +211,34 @@ def test_dataset(model, tokenizer, samples, ds_name, dataset_task, labels,
             pred = normalize_prediction(preds_raw[j], effective_task, labels)
             is_correct = (pred == gold.lower())
 
-            results.append({
+            # 构建带丰富元数据的结果
+            result_entry = {
                 "index": total + 1,
+                "dataset": ds_name,
+                "test_type": test_type,
+                "premise": d.get("premise", ""),
+                "hypothesis": d.get("hypothesis", ""),
                 "gold": gold,
                 "pred": pred,
-                "correct": is_correct
-            })
+                "correct": is_correct,
+            }
+
+            # MR 相关元数据
+            if test_type == "mr":
+                sample_idx = start + j
+                # 优先使用数据中自带的 mr_type 字段（更干净），fallback 到文件名派生
+                data_mr_type = d.get("mr_type", "")
+                result_entry["mr_type"] = (
+                    data_mr_type if data_mr_type
+                    else (mr_types[sample_idx] if mr_types and sample_idx < len(mr_types) else "")
+                )
+                result_entry["pair_id"] = d.get("pair_id", "")
+                result_entry["mr_category"] = d.get("mr_category", "")
+            else:
+                result_entry["pair_id"] = d.get("pair_id", "")
+                result_entry["idx"] = d.get("idx", d.get("index", ""))
+
+            results.append(result_entry)
 
             if is_correct:
                 correct += 1
@@ -320,7 +339,8 @@ def main():
             total, correct, acc, elapsed = test_dataset(
                 model, tokenizer, samples, ds_name,
                 ds_info["task"], ds_info["labels"],
-                out_path, args.max_samples, model_task, args.batch_size
+                out_path, args.max_samples, model_task, args.batch_size,
+                test_type="original",
             )
 
             print(f"  ✅ {ds_name}: {correct}/{total} = {acc:.2f}%  ({elapsed:.0f}s)")
@@ -345,7 +365,8 @@ def main():
             total, correct, acc, elapsed = test_dataset(
                 model, tokenizer, samples, ds_name,
                 ds_info["task"], ds_info["labels"],
-                out_path, args.max_samples, model_task, args.batch_size
+                out_path, args.max_samples, model_task, args.batch_size,
+                test_type="mr", mr_types=mr_types,
             )
 
             print(f"  ✅ {ds_name}: {correct}/{total} = {acc:.2f}%  ({elapsed:.0f}s)")

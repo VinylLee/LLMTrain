@@ -3,15 +3,15 @@
 批量实验编排器：采样 → 转换 → 微调 → 测试全自动流水线
 
 读取 experiments_config.json（或自定义配置文件），对其中定义的一个或多个
-训练数据集依次完成完整实验流程，并在 5 个原始 + 5 个 MR 测试集上评估。
+训练数据集依次完成完整实验流程，并在原始 + MR 测试集上评估。
 
 用法:
-  # 跑全部8个实验 × 3种子 = 24次
+  # 跑全部实验 × 3种子 = 24次
   python scripts/run_batch_experiments.py --config experiments_config.json --seeds 42 43 44
 
   # 先只跑2个实验验证
-  python scripts/run_batch_experiments.py --config experiments_config.json --only mettrain_rte_2490_gemma3_4b
-  original_rte_2490_gemma3_4b --seeds 42 43 44 --dry-run
+  python scripts/run_batch_experiments.py --config experiments_config.json --only mettrain_mnlim_4413_gemma3_4b
+  original_snli_5340_gemma3_4b --seeds 42 43 44 --dry-run
 
   # 使用分层采样
   python scripts/run_batch_experiments.py --config experiments_config.json --seeds 42 43 44 --stratify
@@ -20,15 +20,15 @@
   python scripts/run_batch_experiments.py --config experiments_config.json
 
   # 只跑原始数据实验
-  python scripts/run_batch_experiments.py --config experiments_config.json --only original_rte_2490_gemma3_4b
-  original_snli_13390_gemma3_4b original_mnlim_4413_gemma3_4b original_sick_4439_gemma3_4b
+  python scripts/run_batch_experiments.py --config experiments_config.json --only original_snli_5340_gemma3_4b
+  original_mnlim_4413_gemma3_4b original_sick_4439_gemma3_4b
 
   # 只跑 MetTrain 数据实验
-  python scripts/run_batch_experiments.py --config experiments_config.json --only mettrain_rte_2490_gemma3_4b
-  mettrain_snli_13390_gemma3_4b mettrain_mnlim_4413_gemma3_4b mettrain_sick_4439_gemma3_4b
+  python scripts/run_batch_experiments.py --config experiments_config.json --only mettrain_snli_5340_gemma3_4b
+  mettrain_mnlim_4413_gemma3_4b mettrain_sick_4439_gemma3_4b
 
   # 指定部分实验
-  python scripts/run_batch_experiments.py --config experiments_config.json --only mettrain_rte_2490_gemma3_4b
+  python scripts/run_batch_experiments.py --config experiments_config.json --only mettrain_mnlim_4413_gemma3_4b
 
   # 干跑（只看命令不执行）
   python scripts/run_batch_experiments.py --config experiments_config.json --dry-run
@@ -53,7 +53,9 @@ DEFAULT_OUTPUT_ROOT = WORK_DIR / "output" / "experiments"
 
 # 步骤名称
 STEPS = ["sample", "convert", "finetune", "test_original", "test_mr"]
-ALL_DS = ["mnlim", "mnlimm", "rte", "sick", "snli"]
+
+# 跟踪已写入的 cohort manifest（同一 run 内的首批变体写入，后续复用）
+_cohort_manifest_written = set()
 
 
 def load_config(path):
@@ -162,6 +164,10 @@ def save_experiment_meta(exp, model_name, template, output_root, config):
         "ft_params": exp.get("ft_params", {}),
         "seed_scope": config.get("seed_scope", "sampling"),
         "output_root": str(output_root),
+        # MR-instruction 相关
+        "mr_instruction_mode": exp.get("mr_instruction_mode", "none"),
+        "cohort_id": exp.get("cohort_id"),
+        "strict_pairing": exp.get("strict_pairing", False),
     }
     with open(meta_dir / "experiment_meta.json", "w") as f:
         json.dump(meta, f, indent=2)
@@ -189,7 +195,7 @@ def run_experiment(exp, config, output_root, progress_file, selected_steps,
     print(f"  模型: {model_name}")
     print(f"  训练数据: {exp['train_data']}")
     print(f"  目标采样: {exp['target']}")
-    print(f"  任务类型: {'二分类(RTE)' if is_binary else '三分类'}")
+    print(f"  任务类型: {'二分类' if is_binary else '三分类'}")
     print(f"{'='*70}")
 
     # Step 0: 准备目录
@@ -237,6 +243,29 @@ def run_experiment(exp, config, output_root, progress_file, selected_steps,
     elif resume and step_completed(progress, name, "convert"):
         print(f"    ⏩ 跳过（已完成）")
     else:
+        # MR-instruction mode
+        mr_mode = exp.get("mr_instruction_mode", "none")
+        mr_mode_flag = f"--mr-instruction-mode {mr_mode}"
+
+        # Strict pairing
+        strict_flag = "--strict-pairing" if exp.get("strict_pairing", False) else ""
+
+        # Cohort-based split manifest sharing
+        cohort_id = exp.get("cohort_id")
+        manifest_flag = ""
+        if cohort_id:
+            # Manifest 放在 cohort 的 ft_datasets 目录下（以 cohort 中第一个实验名作为基础路径）
+            cohort_first = cohort_id
+            manifest_path = WORK_DIR / "data" / "ft_datasets" / cohort_first / "split_manifest.json"
+
+            if cohort_id not in _cohort_manifest_written:
+                # 第一个变体：写入 manifest
+                manifest_flag = f"--write-split-manifest {manifest_path}"
+                _cohort_manifest_written.add(cohort_id)
+            else:
+                # 后续变体：复用 manifest
+                manifest_flag = f"--split-manifest {manifest_path}"
+
         binary_flag = "--binary" if is_binary else ""
         ok = run_cmd(
             f"python scripts/convert_nli_to_ft.py "
@@ -244,8 +273,11 @@ def run_experiment(exp, config, output_root, progress_file, selected_steps,
             f"--name {name} "
             f"--split "
             f"--val-ratio 0.05 "
-            f"{binary_flag}",
-            f"转换 {name}",
+            f"{binary_flag} "
+            f"{mr_mode_flag} "
+            f"{strict_flag} "
+            f"{manifest_flag}",
+            f"转换 {name} (mode={mr_mode})",
             dry_run,
         )
         if not dry_run:
@@ -416,7 +448,7 @@ def collect_summary(output_root, summary_file):
             })
 
     # 写 SUMMARY.md
-    all_ds = ["mnlim", "mnlimm", "rte", "sick", "snli"]
+    all_ds = ["mnlim", "mnlimm", "sick", "snli"]
     summary_file.parent.mkdir(parents=True, exist_ok=True)
     with open(summary_file, "w") as f:
         f.write("# 批量实验测试结果汇总\n\n")

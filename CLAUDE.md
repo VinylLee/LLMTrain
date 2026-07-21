@@ -154,3 +154,7 @@ pip install -r requirements.txt    # requests, python-dotenv
 - **Published work**: MetTrain (MR-driven semi-supervised NLI training) using 14 MRs, R-Drop regularization
 - **Active exploration**: MR-as-Instruction fine-tuning — encoding MR logic as structured input during LLM fine-tuning rather than just data augmentation
 - **Key hypothesis**: MR encoding helps LLMs learn logical constraints and generalize to unseen MRs
+
+## Research Plans
+
+- `.research/MR_AS_INSTRUCTION_PLAN.md` — Full experimental design for MR-as-Instruction, including variable definitions, instruction templates, evaluation protocols, and staged execution plan. Read this before implementing any MR-instruction features or modifying the convert/train pipeline for experiments.

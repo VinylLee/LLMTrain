@@ -43,4 +43,5 @@
 - 修改实验编排前检查对应 `experiments_config*.json` 与模型输出根目录下的 `_progress.json`；批量脚本支持断点状态，避免误重跑昂贵训练。
 - `requirements.txt` 只覆盖 API 推理的最小依赖。LoRA 流程还依赖项目环境中的 PyTorch、Transformers、PEFT、LLaMA Factory 等。
 - 工作区含大量实验产物和可能属于用户的未提交内容。只修改任务要求涉及的文件，先检查再处理。
-- 架构、实验范围或目录约定发生变化时，同步更新 `PROJECT_OVERVIEW.md` 和本文件的“当前实验状态”。
+- 架构、实验范围或目录约定发生变化时，同步更新 `PROJECT_OVERVIEW.md` 和本文件的”当前实验状态”。
+- 研究实验规划见 `.research/` 目录。涉及新实验设计、MR instruction 模式、数据泄漏防范或评估协议时，先查看该目录下的相关计划文档再动手修改代码。
