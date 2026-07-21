@@ -1,0 +1,137 @@
+{
+  "model": "google/gemma-3-4b-it",
+  "template": "gemma",
+  "cuda": "2",
+  "experiments": [
+    {
+      "name": "mettrain_mnlim_4413_gemma3_4b",
+      "train_data": "data/nli/mettrain/mnlim_lr0.0051_gemma-3-4b-it-qat/augmented_data.json",
+      "target": 4413,
+      "task_type": "nli",
+      "ft_params": {
+        "lr": 3e-4,
+        "epochs": 3.0,
+        "rank": 8,
+        "batch": 4,
+        "grad_accum": 8
+      }
+    },
+    {
+      "name": "mettrain_rte_2490_gemma3_4b",
+      "train_data": "data/nli/mettrain/rte_lr0.8_gemma-3-4b-it-qat/augmented_data.json",
+      "target": 2490,
+      "task_type": "nli-binary",
+      "ft_params": {
+        "lr": 3e-4,
+        "epochs": 3.0,
+        "rank": 8,
+        "batch": 4,
+        "grad_accum": 8
+      }
+    },
+    {
+      "name": "mettrain_sick_4439_gemma3_4b",
+      "train_data": "data/nli/mettrain/sick_lr1.0_gemma-3-4b-it-qat/augmented_data.json",
+      "target": 4439,
+      "task_type": "nli",
+      "ft_params": {
+        "lr": 3e-4,
+        "epochs": 3.0,
+        "rank": 8,
+        "batch": 4,
+        "grad_accum": 8
+      }
+    },    {
+      "name": "mettrain_sick_11176_gemma3_4b",
+      "train_data": "data/nli/mettrain/sick_lr1.0_gemma-3-4b-it-qat/augmented_data.json",
+      "target": 11176,
+      "task_type": "nli",
+      "ft_params": {
+        "lr": 3e-4,
+        "epochs": 3.0,
+        "rank": 8,
+        "batch": 4,
+        "grad_accum": 8
+      }
+    },
+    {
+      "name": "mettrain_snli_5340_gemma3_4b",
+      "train_data": "data/nli/mettrain/snli_lr0.0037_gemma-3-4b-it-qat/augmented_data.json",
+      "target": 5340,
+      "task_type": "nli",
+      "ft_params": {
+        "lr": 3e-4,
+        "epochs": 3.0,
+        "rank": 8,
+        "batch": 4,
+        "grad_accum": 8
+      }
+    },
+    {
+      "name": "original_mnlim_4413_gemma3_4b",
+      "train_data": "data/nli/original_dataset/mnlim/train.json",
+      "target": 4413,
+      "task_type": "nli",
+      "ft_params": {
+        "lr": 3e-4,
+        "epochs": 3.0,
+        "rank": 8,
+        "batch": 4,
+        "grad_accum": 8
+      }
+    },
+    {
+      "name": "original_rte_2490_gemma3_4b",
+      "train_data": "data/nli/original_dataset/rte/train.json",
+      "target": 2490,
+      "task_type": "nli-binary",
+      "ft_params": {
+        "lr": 3e-4,
+        "epochs": 3.0,
+        "rank": 8,
+        "batch": 4,
+        "grad_accum": 8
+      }
+    },
+    {
+      "name": "original_sick_4439_gemma3_4b",
+      "train_data": "data/nli/original_dataset/sick/train.json",
+      "target": 4439,
+      "task_type": "nli",
+      "ft_params": {
+        "lr": 3e-4,
+        "epochs": 3.0,
+        "rank": 8,
+        "batch": 4,
+        "grad_accum": 8
+      }
+    },
+    {
+      "name": "original_snli_5340_gemma3_4b",
+      "train_data": "data/nli/original_dataset/snli/train.json",
+      "target": 5340,
+      "task_type": "nli",
+      "ft_params": {
+        "lr": 3e-4,
+        "epochs": 3.0,
+        "rank": 8,
+        "batch": 4,
+        "grad_accum": 8
+      }
+    }
+  ],
+  "test_sets": {
+    "original": {
+      "mnlim": "data/nli/original_dataset/mnlim/test.json",
+      "mnlimm": "data/nli/original_dataset/mnlimm/test.json",
+      "sick": "data/nli/original_dataset/sick/test.json",
+      "snli": "data/nli/original_dataset/snli/test.json"
+    },
+    "mr": {
+      "mnlim": "data/nli/MR_testing/mnlim_test_MR",
+      "mnlimm": "data/nli/MR_testing/mnlimm_test_MR",
+      "sick": "data/nli/MR_testing/sick_test_MR",
+      "snli": "data/nli/MR_testing/snli_test_MR"
+    }
+  }
+}

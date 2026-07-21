@@ -1,0 +1,116 @@
+{
+  "model": "unsloth/Llama-3.2-3B-Instruct",
+  "requested_model": "meta-llama/Llama-3.2-3B-Instruct",
+  "model_source_note": "Public BF16 non-quantized mirror used because the authenticated Hugging Face account lacks access to Meta's gated repository",
+  "template": "llama3",
+  "cuda": "2",
+  "output_root": "output/experiments/llama32_3b_nli",
+  "seed_scope": "sampling_only; conversion shuffle and LoRA trainer retain the existing default seed 42 for direct Gemma comparability",
+  "experiments": [
+    {
+      "name": "mettrain_mnlim_4413_llama32_3b",
+      "train_data": "data/nli/mettrain/mnlim_lr0.0051_gemma-3-4b-it-qat/augmented_data.json",
+      "target": 4413,
+      "task_type": "nli",
+      "ft_params": {
+        "lr": 0.0003,
+        "epochs": 3.0,
+        "rank": 8,
+        "batch": 4,
+        "grad_accum": 8
+      }
+    },
+    {
+      "name": "mettrain_sick_4439_llama32_3b",
+      "train_data": "data/nli/mettrain/sick_lr1.0_gemma-3-4b-it-qat/augmented_data.json",
+      "target": 4439,
+      "task_type": "nli",
+      "ft_params": {
+        "lr": 0.0003,
+        "epochs": 3.0,
+        "rank": 8,
+        "batch": 4,
+        "grad_accum": 8
+      }
+    },
+    {
+      "name": "mettrain_sick_11176_llama32_3b",
+      "train_data": "data/nli/mettrain/sick_lr1.0_gemma-3-4b-it-qat/augmented_data.json",
+      "target": 11176,
+      "task_type": "nli",
+      "ft_params": {
+        "lr": 0.0003,
+        "epochs": 3.0,
+        "rank": 8,
+        "batch": 4,
+        "grad_accum": 8
+      }
+    },
+    {
+      "name": "mettrain_snli_5340_llama32_3b",
+      "train_data": "data/nli/mettrain/snli_lr0.0037_gemma-3-4b-it-qat/augmented_data.json",
+      "target": 5340,
+      "task_type": "nli",
+      "ft_params": {
+        "lr": 0.0003,
+        "epochs": 3.0,
+        "rank": 8,
+        "batch": 4,
+        "grad_accum": 8
+      }
+    },
+    {
+      "name": "original_mnlim_4413_llama32_3b",
+      "train_data": "data/nli/original_dataset/mnlim/train.json",
+      "target": 4413,
+      "task_type": "nli",
+      "ft_params": {
+        "lr": 0.0003,
+        "epochs": 3.0,
+        "rank": 8,
+        "batch": 4,
+        "grad_accum": 8
+      }
+    },
+    {
+      "name": "original_sick_4439_llama32_3b",
+      "train_data": "data/nli/original_dataset/sick/train.json",
+      "target": 4439,
+      "task_type": "nli",
+      "ft_params": {
+        "lr": 0.0003,
+        "epochs": 3.0,
+        "rank": 8,
+        "batch": 4,
+        "grad_accum": 8
+      }
+    },
+    {
+      "name": "original_snli_5340_llama32_3b",
+      "train_data": "data/nli/original_dataset/snli/train.json",
+      "target": 5340,
+      "task_type": "nli",
+      "ft_params": {
+        "lr": 0.0003,
+        "epochs": 3.0,
+        "rank": 8,
+        "batch": 4,
+        "grad_accum": 8
+      }
+    }
+  ],
+  "test_sets": {
+    "original": {
+      "mnlim": "data/nli/original_dataset/mnlim/test.json",
+      "mnlimm": "data/nli/original_dataset/mnlimm/test.json",
+      "sick": "data/nli/original_dataset/sick/test.json",
+      "snli": "data/nli/original_dataset/snli/test.json"
+    },
+    "mr": {
+      "mnlim": "data/nli/MR_testing/mnlim_test_MR",
+      "mnlimm": "data/nli/MR_testing/mnlimm_test_MR",
+      "sick": "data/nli/MR_testing/sick_test_MR",
+      "snli": "data/nli/MR_testing/snli_test_MR"
+    }
+  }
+}

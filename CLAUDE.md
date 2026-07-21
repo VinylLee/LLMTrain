@@ -2,6 +2,11 @@
 
 This file provides guidance to Claude Code when working with this repository.
 
+> Current repository-wide architecture, the systematic Gemma LoRA experiment
+> pipeline, experiment status, and result-source conventions are documented in
+> `PROJECT_OVERVIEW.md`. Read it before relying on the older API-focused notes
+> below.
+
 ## Project Overview
 
 **MetTrain**: A metamorphic-relation (MR) driven semi-supervised learning framework for Natural Language Inference (NLI). The project explores using metamorphic relations both for data generation and as input encoding during LLM fine-tuning.
