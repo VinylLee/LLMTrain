@@ -13,8 +13,12 @@ build/
 # --- paper
 
 # --- Data (test datasets are large, download from source) ---
+data/
+/data/
 
 # --- Output (API predictions, evaluation reports) ---
+output/
+/output/
 
 # --- Test cache ---
 .pytest_cache/

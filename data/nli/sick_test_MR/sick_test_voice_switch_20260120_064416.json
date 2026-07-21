@@ -1,9 +1,0 @@
-{"premise": "A girl from Asia, in front of a brick window, looks surprised", "hypothesis": "Surprised looks are given by a girl from Asia who is standing in front of a window made of bricks.", "label": 0, "mr_type": "voice_switch", "mr_category": "inv"}
-{"premise": "A girl has a t-shirt and is keeping her mouth open", "hypothesis": "Surprised looks are given by a girl from Asia in front of a brick window.", "label": 1, "mr_type": "voice_switch", "mr_category": "inv"}
-{"premise": "The girl in the red shirt is blowing a bubble", "hypothesis": "A bubble isn't being blown by the girl in a dyed red shirt.", "label": 2, "mr_type": "voice_switch", "mr_category": "inv"}
-{"premise": "One small child is drinking water from the cup", "hypothesis": "Some milk from the bowl isn't being eagerly drunk by the kitten.", "label": 1, "mr_type": "voice_switch", "mr_category": "inv"}
-{"premise": "The cat is playing with a watermelon", "hypothesis": "A watermelon isn't being played with by the cat.", "label": 2, "mr_type": "voice_switch", "mr_category": "inv"}
-{"premise": "A man is playing the guitar", "hypothesis": "An acoustic guitar isn't being played by the man.", "label": 1, "mr_type": "voice_switch", "mr_category": "inv"}
-{"premise": "The lady is breaking raw eggs into a bowl", "hypothesis": "Raw eggs aren't being broken into a bowl by the lady.", "label": 2, "mr_type": "voice_switch", "mr_category": "inv"}
-{"premise": "The woman is cracking eggs into a bowl", "hypothesis": "Raw eggs aren't being broken into a bowl by the lady.", "label": 2, "mr_type": "voice_switch", "mr_category": "inv"}
-{"premise": "A boy in a blue shirt has dirt on his face", "hypothesis": "Dirt is on the face of a boy in a blue dyed shirt.", "label": 0, "mr_type": "voice_switch", "mr_category": "inv"}
