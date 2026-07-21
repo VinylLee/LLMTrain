@@ -12,6 +12,8 @@ build/
 .env
 
 # --- paper
+.research/
+/.research/
 
 # --- Data (test datasets are large, download from source) ---
 data/
