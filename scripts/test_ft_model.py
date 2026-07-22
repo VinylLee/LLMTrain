@@ -7,6 +7,7 @@
     --lora output/ft_gemma_output \
     --data-dir data/nli
 """
+__test__ = False
 import json, os, sys, time, torch
 from pathlib import Path
 from transformers import AutoModelForCausalLM, AutoTokenizer

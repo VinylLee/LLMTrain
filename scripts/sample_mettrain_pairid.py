@@ -13,8 +13,89 @@
 import json
 import random
 import argparse
+import hashlib
 from pathlib import Path
 from collections import Counter
+
+
+SIGNATURE_FIELDS = (
+    "pair_id", "mr_id", "premise", "hypothesis", "label", "idx", "id", "_source",
+)
+
+
+def canonical_sha256(value):
+    payload = json.dumps(
+        value,
+        sort_keys=True,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def file_sha256(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def compute_data_signature(samples):
+    canonical = [
+        {key: sample.get(key) for key in SIGNATURE_FIELDS if key in sample}
+        for sample in samples
+    ]
+    canonical.sort(key=lambda row: json.dumps(
+        row,
+        sort_keys=True,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ))
+    return canonical_sha256(canonical)
+
+
+def build_sampling_report(
+    source_path,
+    sampled_path,
+    source_samples,
+    selected_samples,
+    selected_pair_ids,
+    seed,
+    target,
+    stratify,
+):
+    source_groups = group_by_pairid(source_samples)
+    sampled_groups = group_by_pairid(selected_samples)
+    return {
+        "schema_version": 1,
+        "seed": seed,
+        "target_samples": target,
+        "stratify": bool(stratify),
+        "source_file": str(source_path),
+        "source_file_sha256": file_sha256(source_path),
+        "source_data_signature": compute_data_signature(source_samples),
+        "source_sample_count": len(source_samples),
+        "source_group_count": len(source_groups),
+        "sampled_file": str(sampled_path),
+        "sampled_file_sha256": file_sha256(sampled_path),
+        "sample_data_signature": compute_data_signature(selected_samples),
+        "selected_sample_count": len(selected_samples),
+        "selected_group_count": len(sampled_groups),
+        "selected_pair_ids_sha256": canonical_sha256(selected_pair_ids),
+        "label_distribution": {
+            str(label): count
+            for label, count in sorted(Counter(
+                sample.get("label") for sample in selected_samples
+            ).items(), key=lambda item: str(item[0]))
+        },
+        "sampled_group_size_distribution": {
+            str(size): count
+            for size, count in sorted(Counter(
+                len(group) for group in sampled_groups.values()
+            ).items())
+        },
+    }
 
 
 def load_jsonl(filepath):
@@ -61,6 +142,11 @@ def main():
     parser.add_argument("--output", "-o", required=True, help="输出 JSONL 文件路径")
     parser.add_argument("--stratify", action="store_true",
                         help="分层采样：按标签类别均衡采样（pair_id 分组时按组内多数标签分层）")
+    parser.add_argument(
+        "--report-output",
+        default=None,
+        help="sampling report 路径（默认与 sampled file 同目录的 sampling_report.json）",
+    )
     args = parser.parse_args()
 
     random.seed(args.seed)
@@ -190,16 +276,31 @@ def main():
     print(f"\n💾 保存到: {args.output}")
     out_path = Path(args.output)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(out_path, "w") as f:
+    with open(out_path, "w", encoding="utf-8") as f:
         for s in selected:
             f.write(json.dumps(s, ensure_ascii=False) + "\n")
     print(f"  ✅ 保存完成 ({len(selected)} 条)")
 
     # 额外保存 pair_id 列表方便追溯
     pid_path = out_path.with_suffix(".pair_ids.json")
-    with open(pid_path, "w") as f:
+    with open(pid_path, "w", encoding="utf-8") as f:
         json.dump({"seed": args.seed, "target": args.target, "pair_ids": selected_pair_ids}, f, indent=2)
     print(f"  📝 pair_id 列表已保存: {pid_path}")
+
+    report_path = Path(args.report_output) if args.report_output else out_path.parent / "sampling_report.json"
+    report = build_sampling_report(
+        source_path=Path(args.input),
+        sampled_path=out_path,
+        source_samples=samples,
+        selected_samples=selected,
+        selected_pair_ids=selected_pair_ids,
+        seed=args.seed,
+        target=args.target,
+        stratify=args.stratify,
+    )
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"  📊 sampling report 已保存: {report_path}")
 
 
 if __name__ == "__main__":

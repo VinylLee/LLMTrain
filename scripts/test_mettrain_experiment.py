@@ -5,11 +5,13 @@
   - MR 数据集（聚合所有 MR 类型）
 保存 JSONL 结果到 output/experiments/<name>/tests/{original,mr}/
 """
+__test__ = False
 import json, os, sys, time, torch, logging
 from pathlib import Path
 from collections import Counter
 from transformers import AutoModelForCausalLM, AutoTokenizer, logging as hf_logging
 from peft import PeftModel
+from inference_utils import decode_generated_continuations
 
 # 抑制烦人的生成参数警告
 os.environ["TRANSFORMERS_VERBOSITY"] = "error"
@@ -88,9 +90,7 @@ def call_model_batch(model, tokenizer, prompts, max_tokens=10):
             do_sample=False,
             pad_token_id=tokenizer.pad_token_id,
         )
-    new_tokens = outputs[:, -max_tokens:]
-    return [tokenizer.decode(t, skip_special_tokens=True).strip().lower().rstrip(".!?,")
-            for t in new_tokens]
+    return decode_generated_continuations(outputs, enc["input_ids"].shape[1], tokenizer)
 
 
 def normalize_prediction(pred, task, labels):

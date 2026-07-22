@@ -21,6 +21,7 @@
 - Llama 请求模型为 `meta-llama/Llama-3.2-3B-Instruct`；因 HF 账号无 gated 权限，实际使用并记录为非量化 BF16 镜像 `unsloth/Llama-3.2-3B-Instruct`。
 - 结果文件：`output/experiments/llama32_3b_nli/RESULTS.md`（三种子汇总），`COMPARISON_vs_Gemma.md`（配对差值表）。
 - `experiments_config.json` 还定义了 MetTrain/Original RTE，但当前系统实验目录没有对应三种子结果；不要把它写成已完成。
+- MR-as-Instruction Pilot 的 Stage 2 conversion/工程硬门槛修补已完成：template v2、稳定行序、严格 manifest、cohort metadata/signature 复用校验、整体/by-MR tokenizer 报告、报告哈希和 shuffled confusion matrix 均已验证，125/125 自动检查通过；runner 会在 finetune 前强制 Stage 2 `PASS/OPEN`。但 adding_contradiction、composite_flip、conditional_clause、pronoun_substitution 的数据质量风险仍使 Stage 2 为 FAIL、training gate 为 BLOCKED。Stage 3/4 未启动，也不得在人工解除 blocker 前训练。人工协议见 `.research/MR_INSTRUCTION_DATA_REVIEW_PROTOCOL.md`，交接见 `.research/MR_INSTRUCTION_STAGE2_HANDOFF.md`，报告见 ignored 的 `artifacts/mrinstr_validation/`。
 
 ## 目录约定
 

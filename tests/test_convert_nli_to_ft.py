@@ -10,6 +10,9 @@ import json
 import tempfile
 import shutil
 from pathlib import Path
+import copy
+
+import pytest
 
 # 将被测试模块加入 sys.path
 import sys
@@ -25,13 +28,197 @@ from convert_nli_to_ft import (
     build_instruction_for_sample,
     convert_to_alpaca,
     select_shuffled_descriptions,
+    build_shuffle_audit,
     save_split_manifest,
     load_split_manifest,
+    compute_data_signature,
+    compute_sample_key,
+    sort_samples_by_stable_key,
+    compute_ordered_sample_signature,
+    converted_rows_sha256,
+    validate_manifest_for_groups,
+    summarize_token_lengths,
+    build_token_length_report,
+    INSTRUCTION_TEMPLATE_VERSION,
+    INSTRUCTION_TEMPLATE_HASH,
+    OPERATION_DESCRIPTION_HASH,
+    RELATION_EFFECT_HASH,
     MR_OPERATION_DESCRIPTIONS,
     MR_RELATION_EFFECTS,
     KNOWN_MR_IDS,
     LABEL_NAMES_3CLASS,
 )
+
+
+def test_data_signature_is_order_independent_and_content_sensitive():
+    rows = [make_sample(pair_id=1), make_sample(pair_id=2)]
+    assert compute_data_signature(rows) == compute_data_signature(list(reversed(rows)))
+    changed = [dict(row) for row in rows]
+    changed[0]["hypothesis"] = "changed"
+    assert compute_data_signature(rows) != compute_data_signature(changed)
+
+
+def test_custom_instruction_reaches_source_and_augmented():
+    rows = make_group(1, ["none", "synonym_replacement"])
+    groups = build_pair_groups(rows)
+    original_map, _ = build_original_map(groups)
+    for sample in rows:
+        sample["_group_key"] = groups[0]["group_key"]
+    converted, _ = convert_to_alpaca(rows, mode="pair_operation",
+                                     original_map=original_map,
+                                     operation_descriptions=MR_OPERATION_DESCRIPTIONS,
+                                     nli_instruction="CUSTOM_INSTRUCTION_SENTINEL")
+    assert all("CUSTOM_INSTRUCTION_SENTINEL" in row["instruction"] for row in converted)
+
+
+def test_shuffled_preserves_frequency_and_has_no_description_fixed_points():
+    rows = make_group(1, ["none", "synonym_replacement", "antonym_substitution",
+                          "adding_contradiction", "voice_switch"])
+    assigned = select_shuffled_descriptions(rows, set(), 42)
+    true_desc = [MR_OPERATION_DESCRIPTIONS[s["mr_id"]] for s in rows if s["mr_id"] != "none"]
+    assigned_desc = [MR_OPERATION_DESCRIPTIONS[m] for m in assigned if m != "none"]
+    assert sorted(true_desc) == sorted(assigned_desc)
+    assert all(a != b for a, b in zip(true_desc, assigned_desc))
+
+
+def test_token_summary_cutoff():
+    summary = summarize_token_lengths([1, 2, 10, 20], 10)
+    assert summary["count"] == 4
+    assert summary["over_cutoff_count"] == 1
+    assert summary["over_cutoff_ratio"] == .25
+
+
+class FakeChatTokenizer:
+    def apply_chat_template(self, messages, tokenize, add_generation_prompt):
+        del tokenize, add_generation_prompt
+        marker = messages[0]["content"].split("LEN:", 1)[1].split()[0]
+        return [0] * int(marker)
+
+
+def test_token_report_uses_real_tokenizer_path_and_reports_by_mr():
+    train_rows = [
+        {"instruction": "LEN:4", "input": "a", "output": "entailment"},
+        {"instruction": "LEN:9", "input": "b", "output": "contradiction"},
+    ]
+    val_rows = [
+        {"instruction": "LEN:6", "input": "c", "output": "neutral"},
+    ]
+    report = build_token_length_report(
+        train_rows,
+        val_rows,
+        "fake-tokenizer",
+        cutoff_len=5,
+        train_samples=[
+            make_sample(mr_id="none"),
+            make_sample(mr_id="adding_contradiction"),
+        ],
+        val_samples=[make_sample(mr_id="synonym_replacement")],
+        tokenizer=FakeChatTokenizer(),
+    )
+    assert report["counting_method"] == "apply_chat_template"
+    assert report["counting_method_counts"] == {"apply_chat_template": 3}
+    assert report["train"]["over_cutoff_count"] == 1
+    assert report["validation"]["over_cutoff_count"] == 1
+    assert report["by_mr"]["train"]["none"]["count"] == 1
+    assert report["by_mr"]["train"]["none"]["over_cutoff_count"] == 0
+    assert report["by_mr"]["train"]["adding_contradiction"]["over_cutoff_count"] == 1
+    assert report["by_mr"]["validation"]["synonym_replacement"]["count"] == 1
+
+
+def test_template_v2_hashes_are_full_sha256():
+    assert INSTRUCTION_TEMPLATE_VERSION == 2
+    for value in (
+        INSTRUCTION_TEMPLATE_HASH,
+        OPERATION_DESCRIPTION_HASH,
+        RELATION_EFFECT_HASH,
+    ):
+        assert len(value) == 64
+        int(value, 16)
+
+
+def test_reference_template_v2_handles_embedded_quotes():
+    sample = make_sample(mr_id="synonym_replacement")
+    original = make_sample(
+        premise='A person said "yes" and then left.',
+        hypothesis='The person said "yes".',
+        mr_id="none",
+    )
+    result = build_instruction_for_sample(
+        sample,
+        original_sample=original,
+        mode="pair_operation",
+        operation_description=MR_OPERATION_DESCRIPTIONS["synonym_replacement"],
+    )
+    instruction = result["instruction"]
+    assert (
+        '<reference_premise>\nA person said "yes" and then left.\n'
+        '</reference_premise>'
+    ) in instruction
+    assert (
+        '<reference_hypothesis>\nThe person said "yes".\n'
+        '</reference_hypothesis>'
+    ) in instruction
+    assert 'Premise: "' not in instruction
+    assert 'Hypothesis: "' not in instruction
+
+
+def test_stable_sort_and_ordered_signature_ignore_input_order():
+    rows = make_group(2, ["none", "synonym_replacement"]) + make_group(
+        1, ["none", "adding_contradiction"]
+    )
+    groups = build_pair_groups(rows)
+    for group in groups:
+        for sample in group["samples"]:
+            sample["_group_key"] = group["group_key"]
+    first = sort_samples_by_stable_key(rows)
+    second = sort_samples_by_stable_key(list(reversed(rows)))
+    assert [compute_sample_key(row) for row in first] == [
+        compute_sample_key(row) for row in second
+    ]
+    assert compute_ordered_sample_signature(first, []) == (
+        compute_ordered_sample_signature(second, [])
+    )
+
+
+def test_converted_rows_sha256_covers_exact_order_and_content():
+    rows = [
+        {"instruction": "a", "input": "b", "output": "c"},
+        {"instruction": "d", "input": "e", "output": "f"},
+    ]
+    assert converted_rows_sha256(rows) == converted_rows_sha256(list(rows))
+    assert converted_rows_sha256(rows) != converted_rows_sha256(list(reversed(rows)))
+    changed = [dict(row) for row in rows]
+    changed[0]["instruction"] = "changed"
+    assert converted_rows_sha256(rows) != converted_rows_sha256(changed)
+
+
+def test_shuffle_audit_contains_true_to_assigned_confusion_matrix():
+    rows = make_group(
+        1,
+        [
+            "none",
+            "synonym_replacement",
+            "antonym_substitution",
+            "adding_contradiction",
+            "voice_switch",
+        ],
+    )
+    assigned = select_shuffled_descriptions(rows, set(), 42)
+    audit = build_shuffle_audit(rows, assigned, 42)
+    matrix = audit["true_to_assigned_confusion_matrix"]
+    assert audit["total_augmented"] == 4
+    assert audit["fixed_point_count"] == 0
+    assert sum(sum(row.values()) for row in matrix.values()) == 4
+    assert {
+        key: sum(row.values()) for key, row in matrix.items()
+    } == audit["true_description_counts"]
+
+
+def test_modes_without_operation_do_not_report_missing_descriptions():
+    rows = make_group(1, ["none", "synonym_replacement"])
+    for mode in ("none", "pair_only"):
+        _, report = convert_to_alpaca(rows, mode=mode)
+        assert report["missing_operation_count"] == 0
 
 
 # ============================================================
@@ -549,6 +736,65 @@ def test_manifest_save_load():
         assert loaded["val_ratio"] == 0.05
         assert ("file", "0") in [tuple(i) if isinstance(i, list) else i for i in loaded["train_group_ids"]]
         print("✅ test_manifest_save_load")
+
+
+def make_valid_manifest(tmp_path):
+    rows = (
+        make_group(1, ["none", "synonym_replacement"])
+        + make_group(2, ["none", "adding_contradiction"])
+    )
+    groups = build_pair_groups(rows)
+    train_ids = [groups[0]["group_key"]]
+    val_ids = [groups[1]["group_key"]]
+    signature = compute_data_signature(rows)
+    path = tmp_path / "split_manifest.json"
+    manifest = save_split_manifest(
+        manifest_path=path,
+        seed=42,
+        val_ratio=0.5,
+        train_group_ids=train_ids,
+        val_group_ids=val_ids,
+        source_files=["data.jsonl"],
+        data_signature=signature,
+        train_sample_count=len(groups[0]["samples"]),
+        val_sample_count=len(groups[1]["samples"]),
+    )
+    return path, manifest, groups, signature
+
+
+def test_manifest_rejects_duplicate_group_ids(tmp_path):
+    _, manifest, groups, signature = make_valid_manifest(tmp_path)
+    duplicate = copy.deepcopy(manifest)
+    duplicate["train_group_ids"] = [
+        duplicate["train_group_ids"][0],
+        duplicate["train_group_ids"][0],
+    ]
+    with pytest.raises(ValueError, match="重复 group ID"):
+        validate_manifest_for_groups(duplicate, groups, 42, 0.5, signature)
+
+
+@pytest.mark.parametrize("field", [
+    "all_group_count",
+    "train_group_count",
+    "val_group_count",
+    "train_sample_count",
+    "val_sample_count",
+])
+def test_manifest_rejects_incorrect_counts(tmp_path, field):
+    _, manifest, groups, signature = make_valid_manifest(tmp_path)
+    invalid = copy.deepcopy(manifest)
+    invalid[field] += 1
+    with pytest.raises(ValueError, match=field):
+        validate_manifest_for_groups(invalid, groups, 42, 0.5, signature)
+
+
+def test_manifest_load_rejects_self_hash_tampering(tmp_path):
+    path, _, _, _ = make_valid_manifest(tmp_path)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["train_sample_count"] += 1
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="self-hash"):
+        load_split_manifest(path)
 
 
 # ============================================================

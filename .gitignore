@@ -22,6 +22,8 @@ data/
 # --- Output (API predictions, evaluation reports) ---
 output/
 /output/
+/artifacts/
+/data/ft_datasets/_cohorts/
 
 # --- Test cache ---
 .pytest_cache/

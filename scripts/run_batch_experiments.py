@@ -45,8 +45,15 @@ import sys
 import os
 import argparse
 import time
+import hashlib
+from collections import Counter, defaultdict
 from pathlib import Path
 from datetime import datetime
+
+from sample_mettrain_pairid import (
+    build_sampling_report,
+    compute_data_signature as compute_sampling_data_signature,
+)
 
 WORK_DIR = Path("/home/ubuntu/LLMTrain/LLMTrain")
 DEFAULT_OUTPUT_ROOT = WORK_DIR / "output" / "experiments"
@@ -56,6 +63,310 @@ STEPS = ["sample", "convert", "finetune", "test_original", "test_mr"]
 
 # 跟踪已写入的 cohort manifest（同一 run 内的首批变体写入，后续复用）
 _cohort_manifest_written = set()
+_cohort_sample_planned = set()
+
+
+def canonical_sha256(value):
+    payload = json.dumps(value, sort_keys=True, ensure_ascii=False,
+                         separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def file_sha256(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def load_jsonl_strict(path):
+    rows = []
+    with open(path, encoding="utf-8") as handle:
+        for line_number, line in enumerate(handle, 1):
+            if not line.strip():
+                continue
+            try:
+                rows.append(json.loads(line))
+            except json.JSONDecodeError as exc:
+                raise ValueError(f"Invalid JSONL at {path}:{line_number}: {exc}") from exc
+    return rows
+
+
+def workspace_relative(path):
+    return str(Path(path).resolve().relative_to(WORK_DIR.resolve()))
+
+
+def pair_key(value):
+    return json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+
+
+def group_rows_by_pair_id(rows, label):
+    groups = defaultdict(list)
+    for index, row in enumerate(rows):
+        if "pair_id" not in row:
+            raise ValueError(f"{label} row {index} 缺少 pair_id，不能安全复用 cohort")
+        groups[pair_key(row["pair_id"])].append(row)
+    return groups
+
+
+def validate_sampled_groups_against_source(source_rows, sampled_rows, pair_ids):
+    """Require sampled rows to contain every row of each selected source group."""
+    normalized_pair_ids = [pair_key(value) for value in pair_ids]
+    if len(normalized_pair_ids) != len(set(normalized_pair_ids)):
+        raise ValueError("sampled pair manifest 含重复 pair_id")
+
+    source_groups = group_rows_by_pair_id(source_rows, "source")
+    sampled_groups = group_rows_by_pair_id(sampled_rows, "sampled")
+    selected_ids = set(normalized_pair_ids)
+    if set(sampled_groups) != selected_ids:
+        raise ValueError(
+            "sampled groups 与 pair manifest 不一致: "
+            f"sampled_only={sorted(set(sampled_groups) - selected_ids)[:5]} "
+            f"manifest_only={sorted(selected_ids - set(sampled_groups))[:5]}"
+        )
+    missing_source = selected_ids - set(source_groups)
+    if missing_source:
+        raise ValueError(f"pair manifest 含 source 中不存在的 group: {sorted(missing_source)[:5]}")
+
+    for group_id in sorted(selected_ids):
+        source_counter = Counter(canonical_sha256(row) for row in source_groups[group_id])
+        sampled_counter = Counter(canonical_sha256(row) for row in sampled_groups[group_id])
+        if source_counter != sampled_counter:
+            raise ValueError(f"sampled group 未完整复用 source group: {group_id}")
+    return {
+        "source_group_count": len(source_groups),
+        "selected_group_count": len(sampled_groups),
+        "selected_sample_count": len(sampled_rows),
+    }
+
+
+def initialize_existing_cohort_metadata(exp, cohort_dir, git_sha):
+    """Explicitly bootstrap metadata only after validating a legacy cohort."""
+    cohort_id = exp.get("cohort_id")
+    seed = exp.get("seed", 42)
+    source_path = resolve_workspace_path(exp["train_data"])
+    sampled_path = cohort_dir / "sampled.json"
+    pair_manifest_path = sampled_path.with_suffix(".pair_ids.json")
+    sampling_report_path = cohort_dir / "sampling_report.json"
+    cohort_meta_path = cohort_dir / "cohort_meta.json"
+
+    for required in (source_path, sampled_path, pair_manifest_path):
+        if not required.exists():
+            raise FileNotFoundError(f"初始化 cohort metadata 缺少文件: {required}")
+
+    source_rows = load_jsonl_strict(source_path)
+    sampled_rows = load_jsonl_strict(sampled_path)
+    pair_manifest = json.loads(pair_manifest_path.read_text(encoding="utf-8"))
+    if pair_manifest.get("seed") != seed:
+        raise ValueError("sampled pair manifest seed 与 experiment 不一致")
+    if pair_manifest.get("target") != exp["target"]:
+        raise ValueError("sampled pair manifest target 与 experiment 不一致")
+    pair_ids = pair_manifest.get("pair_ids")
+    if not isinstance(pair_ids, list):
+        raise ValueError("sampled pair manifest 缺少 pair_ids list")
+    validate_sampled_groups_against_source(source_rows, sampled_rows, pair_ids)
+
+    sampling_report = build_sampling_report(
+        source_path=source_path,
+        sampled_path=sampled_path,
+        source_samples=source_rows,
+        selected_samples=sampled_rows,
+        selected_pair_ids=pair_ids,
+        seed=seed,
+        target=exp["target"],
+        stratify=exp.get("stratify", False),
+    )
+    sampling_report_path.write_text(
+        json.dumps(sampling_report, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    dirty = bool(subprocess.check_output(
+        ["git", "status", "--short"], cwd=WORK_DIR, text=True
+    ).strip())
+    cohort_meta = {
+        "schema_version": 1,
+        "cohort_id": cohort_id,
+        "seed": seed,
+        "source_dataset": workspace_relative(source_path),
+        "target_samples": exp["target"],
+        "stratify": bool(exp.get("stratify", False)),
+        "sampled_file": workspace_relative(sampled_path),
+        "sample_manifest": workspace_relative(pair_manifest_path),
+        "sampling_report": workspace_relative(sampling_report_path),
+        "source_file_sha256": file_sha256(source_path),
+        "sampled_file_sha256": file_sha256(sampled_path),
+        "sample_manifest_sha256": file_sha256(pair_manifest_path),
+        "sampling_report_sha256": file_sha256(sampling_report_path),
+        "sample_data_signature": compute_sampling_data_signature(sampled_rows),
+        "created_by_commit": git_sha,
+        "working_tree_dirty": dirty,
+    }
+    cohort_meta_path.write_text(
+        json.dumps(cohort_meta, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    return validate_cohort_artifacts(exp, cohort_dir)
+
+
+def validate_cohort_artifacts(exp, cohort_dir):
+    """Validate metadata, hashes, pair manifest, and full-group sampling."""
+    cohort_id = exp.get("cohort_id")
+    seed = exp.get("seed", 42)
+    source_path = resolve_workspace_path(exp["train_data"])
+    sampled_path = cohort_dir / "sampled.json"
+    pair_manifest_path = sampled_path.with_suffix(".pair_ids.json")
+    sampling_report_path = cohort_dir / "sampling_report.json"
+    cohort_meta_path = cohort_dir / "cohort_meta.json"
+    for required in (
+        source_path,
+        sampled_path,
+        pair_manifest_path,
+        sampling_report_path,
+        cohort_meta_path,
+    ):
+        if not required.exists():
+            raise FileNotFoundError(f"cohort 复用缺少审计文件: {required}")
+
+    source_rows = load_jsonl_strict(source_path)
+    sampled_rows = load_jsonl_strict(sampled_path)
+    pair_manifest = json.loads(pair_manifest_path.read_text(encoding="utf-8"))
+    sampling_report = json.loads(sampling_report_path.read_text(encoding="utf-8"))
+    cohort_meta = json.loads(cohort_meta_path.read_text(encoding="utf-8"))
+    pair_ids = pair_manifest.get("pair_ids")
+    if not isinstance(pair_ids, list):
+        raise ValueError("sampled pair manifest 缺少 pair_ids list")
+    validation = validate_sampled_groups_against_source(
+        source_rows, sampled_rows, pair_ids
+    )
+
+    expected_meta = {
+        "schema_version": 1,
+        "cohort_id": cohort_id,
+        "seed": seed,
+        "source_dataset": workspace_relative(source_path),
+        "target_samples": exp["target"],
+        "stratify": bool(exp.get("stratify", False)),
+        "sampled_file": workspace_relative(sampled_path),
+        "sample_manifest": workspace_relative(pair_manifest_path),
+        "sampling_report": workspace_relative(sampling_report_path),
+        "source_file_sha256": file_sha256(source_path),
+        "sampled_file_sha256": file_sha256(sampled_path),
+        "sample_manifest_sha256": file_sha256(pair_manifest_path),
+        "sampling_report_sha256": file_sha256(sampling_report_path),
+        "sample_data_signature": compute_sampling_data_signature(sampled_rows),
+    }
+    mismatches = {
+        key: {"expected": value, "actual": cohort_meta.get(key)}
+        for key, value in expected_meta.items()
+        if cohort_meta.get(key) != value
+    }
+    if mismatches:
+        raise ValueError(f"cohort_meta 不匹配: {mismatches}")
+    if not cohort_meta.get("created_by_commit"):
+        raise ValueError("cohort_meta 缺少 created_by_commit")
+
+    expected_report = {
+        "schema_version": 1,
+        "seed": seed,
+        "target_samples": exp["target"],
+        "stratify": bool(exp.get("stratify", False)),
+        "source_file_sha256": expected_meta["source_file_sha256"],
+        "source_data_signature": compute_sampling_data_signature(source_rows),
+        "source_sample_count": len(source_rows),
+        "sampled_file_sha256": expected_meta["sampled_file_sha256"],
+        "sample_data_signature": expected_meta["sample_data_signature"],
+        "selected_sample_count": len(sampled_rows),
+        "selected_group_count": validation["selected_group_count"],
+        "selected_pair_ids_sha256": canonical_sha256(pair_ids),
+    }
+    report_mismatches = {
+        key: {"expected": value, "actual": sampling_report.get(key)}
+        for key, value in expected_report.items()
+        if sampling_report.get(key) != value
+    }
+    if report_mismatches:
+        raise ValueError(f"sampling_report 不匹配: {report_mismatches}")
+    if pair_manifest.get("seed") != seed or pair_manifest.get("target") != exp["target"]:
+        raise ValueError("sampled pair manifest seed/target 不匹配")
+    if len(sampled_rows) < exp["target"]:
+        raise ValueError("sampled rows 未达到 target")
+    return {
+        **validation,
+        "sample_data_signature": expected_meta["sample_data_signature"],
+        "sampled_file_sha256": expected_meta["sampled_file_sha256"],
+        "sampling_report_sha256": expected_meta["sampling_report_sha256"],
+    }
+
+
+def enforce_stage2_training_gate(config, exp, conversion_report):
+    """Refuse finetune unless the configured Stage 2 report is PASS/OPEN."""
+    gate = config.get("stage2_gate") or {}
+    if not gate.get("required", False):
+        return None
+    report_value = gate.get("report")
+    if not report_value:
+        raise RuntimeError("Stage 2 gate required but report path is not configured")
+    report_path = resolve_workspace_path(report_value)
+    if not report_path.exists():
+        raise RuntimeError(f"Stage 2 gate report 不存在: {report_path}")
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    mode = exp.get("mr_instruction_mode", "none")
+    mode_report = (report.get("mode_reports") or {}).get(mode) or {}
+    failures = []
+    expected = {
+        "stage2_status": "PASS",
+        "training_gate": "OPEN",
+        "automated_checks_status": "PASS",
+        "seed": exp.get("seed", 42),
+        "cohort_id": exp.get("cohort_id"),
+        "data_signature": conversion_report.get("data_signature"),
+        "manifest_hash": conversion_report.get("manifest_hash"),
+        "ordered_sample_signature": conversion_report.get("ordered_sample_signature"),
+        "instruction_template_version": config.get("instruction_template_version", 2),
+    }
+    for key, value in expected.items():
+        if report.get(key) != value:
+            failures.append(f"{key}: expected={value!r} actual={report.get(key)!r}")
+    for key in ("converted_train_sha256", "converted_val_sha256"):
+        if mode_report.get(key) != conversion_report.get(key):
+            failures.append(
+                f"{mode}.{key}: expected={conversion_report.get(key)!r} "
+                f"actual={mode_report.get(key)!r}"
+            )
+    if failures:
+        raise RuntimeError("Stage 2 training gate blocked:\n  " + "\n  ".join(failures))
+    return report
+
+
+def build_run_signature(exp, config, git_sha, data_signature=None,
+                        manifest_hash=None, test_signatures=None):
+    """Immutable identity for safe resume/reuse of a scientific run."""
+    payload = {
+        "schema_version": 1,
+        "git_sha": git_sha,
+        "mode": exp.get("mr_instruction_mode", "none"),
+        "seeds": {
+            "sampling": exp.get("seed"), "split": exp.get("seed"),
+            "shuffle": exp.get("seed"), "trainer": exp.get("seed"),
+            "data": exp.get("seed"),
+        },
+        "data_signature": data_signature,
+        "manifest_hash": manifest_hash,
+        "template": {"name": config.get("template"),
+                     "version": config.get("template_version", 1)},
+        "instruction_template": {
+            "version": config.get("instruction_template_version", 2),
+        },
+        "model": {"path": config.get("model"),
+                  "revision": config.get("model_revision")},
+        "tokenizer": {"path": config.get("tokenizer", config.get("model")),
+                      "revision": config.get("tokenizer_revision")},
+        "training": exp.get("ft_params", {}),
+        "generation": config.get("generation", {"do_sample": False, "max_new_tokens": 10}),
+        "test_sets": test_signatures or {},
+    }
+    return {"run_signature": canonical_sha256(payload), "run_signature_payload": payload}
 
 
 def load_config(path):
@@ -134,8 +445,13 @@ num_train_epochs: {p.get('epochs', 3.0)}
 lr_scheduler_type: cosine
 warmup_ratio: 0.1
 logging_steps: 10
-save_steps: 9999
-eval_strategy: "no"
+save_steps: {exp.get('save_steps', 9999)}
+save_total_limit: {exp.get('save_total_limit', 2)}
+eval_dataset: {exp['name']}_val
+eval_strategy: {exp.get('eval_strategy', 'no')}
+eval_steps: {exp.get('eval_steps', 50)}
+seed: {exp.get('seed', 42)}
+data_seed: {exp.get('seed', 42)}
 output_dir: {output_root / exp['name'] / 'model'}
 report_to: none
 bf16: true
@@ -168,13 +484,16 @@ def save_experiment_meta(exp, model_name, template, output_root, config):
         "mr_instruction_mode": exp.get("mr_instruction_mode", "none"),
         "cohort_id": exp.get("cohort_id"),
         "strict_pairing": exp.get("strict_pairing", False),
+        "instruction_template_version": config.get("instruction_template_version", 2),
+        "conda_environment": "llmtrain310",
     }
     with open(meta_dir / "experiment_meta.json", "w") as f:
         json.dump(meta, f, indent=2)
 
 
 def run_experiment(exp, config, output_root, progress_file, selected_steps,
-                   dry_run=False, resume=False):
+                   dry_run=False, resume=False,
+                   initialize_cohort_metadata=False):
     """运行单个实验的完整流水线"""
     name = exp["name"]
     model_name = config["model"]
@@ -183,6 +502,8 @@ def run_experiment(exp, config, output_root, progress_file, selected_steps,
     task_type = exp["task_type"]
     is_binary = task_type == "nli-binary"
     progress = load_progress(progress_file)
+    git_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=WORK_DIR,
+                                      text=True).strip()
 
     # 测试集范围由 config 的 test_sets 决定（统一 original+mr 的数据集键）
     ts = config.get("test_sets", {})
@@ -200,14 +521,48 @@ def run_experiment(exp, config, output_root, progress_file, selected_steps,
 
     # Step 0: 准备目录
     ft_data_dir = WORK_DIR / "data" / "ft_datasets" / name
-    sampled_path = ft_data_dir / "sampled.json"
+    cohort_id = exp.get("cohort_id")
+    cohort_dir = (WORK_DIR / "data" / "ft_datasets" / "_cohorts" /
+                  cohort_id / f"seed_{exp.get('seed', 42)}") if cohort_id else ft_data_dir
+    sampled_path = cohort_dir / "sampled.json"
+    cohort_key = (cohort_id, exp.get("seed", 42)) if cohort_id else None
     exp_dir = output_root / name
     model_dir = exp_dir / "model"
     if not dry_run:
         ft_data_dir.mkdir(parents=True, exist_ok=True)
+        cohort_dir.mkdir(parents=True, exist_ok=True)
         for sub in ["tests/original", "tests/mr"]:
             (exp_dir / sub).mkdir(parents=True, exist_ok=True)
         save_experiment_meta(exp, model_name, template, output_root, config)
+
+    if cohort_id and sampled_path.exists() and cohort_key not in _cohort_sample_planned:
+        metadata_missing = not (
+            (cohort_dir / "cohort_meta.json").exists() and
+            (cohort_dir / "sampling_report.json").exists()
+        )
+        if dry_run:
+            if metadata_missing and not initialize_cohort_metadata:
+                raise RuntimeError(
+                    "已有 sampled file 但缺少 cohort_meta.json/sampling_report.json；"
+                    "即使 dry-run 也拒绝复用。请先显式使用 --initialize-cohort-metadata。"
+                )
+            if metadata_missing:
+                print(f"    [DRY-RUN] 将初始化并验证 cohort metadata/signatures: {cohort_dir}")
+            else:
+                validate_cohort_artifacts(exp, cohort_dir)
+                print(f"    [DRY-RUN] cohort metadata/signatures 验证通过: {cohort_dir}")
+            _cohort_sample_planned.add(cohort_key)
+        else:
+            if metadata_missing:
+                if not initialize_cohort_metadata:
+                    raise RuntimeError(
+                        "已有 sampled file 但缺少 cohort_meta.json/sampling_report.json；"
+                        "拒绝复用。请先显式使用 --initialize-cohort-metadata。"
+                    )
+                initialize_existing_cohort_metadata(exp, cohort_dir, git_sha)
+            else:
+                validate_cohort_artifacts(exp, cohort_dir)
+            _cohort_sample_planned.add(cohort_key)
 
     # ============================================================
     # Step 1: 采样
@@ -215,6 +570,9 @@ def run_experiment(exp, config, output_root, progress_file, selected_steps,
     print(f"\n  ── Step 1/5: 采样 ──")
     if "sample" not in selected_steps:
         print(f"    ⏩ 跳过（本次未选择该阶段）")
+    elif cohort_id and (cohort_key in _cohort_sample_planned or sampled_path.exists()):
+        print(f"    ⏩ 复用 cohort sampled file: {sampled_path}")
+        ok = True
     elif resume and step_completed(progress, name, "sample"):
         print(f"    ⏩ 跳过（已完成）")
     else:
@@ -225,12 +583,17 @@ def run_experiment(exp, config, output_root, progress_file, selected_steps,
             f"--target {exp['target']} "
             f"--seed {exp.get('seed', 42)} "
             f"{stratify_flag} "
-            f"--output {sampled_path}",
+            f"--output {sampled_path} "
+            f"--report-output {cohort_dir / 'sampling_report.json'}",
             f"采样 {name} (target={exp['target']})",
             dry_run,
         )
         if not dry_run:
             mark_step(progress_file, progress, name, "sample", "completed" if ok else "failed")
+        if cohort_id and ok:
+            if not dry_run:
+                initialize_existing_cohort_metadata(exp, cohort_dir, git_sha)
+            _cohort_sample_planned.add(cohort_key)
         if not ok and not dry_run:
             return False
 
@@ -246,6 +609,10 @@ def run_experiment(exp, config, output_root, progress_file, selected_steps,
         # MR-instruction mode
         mr_mode = exp.get("mr_instruction_mode", "none")
         mr_mode_flag = f"--mr-instruction-mode {mr_mode}"
+        instruction_template_flag = (
+            "--instruction-template-version "
+            f"{config.get('instruction_template_version', 2)}"
+        )
 
         # Strict pairing
         strict_flag = "--strict-pairing" if exp.get("strict_pairing", False) else ""
@@ -255,13 +622,15 @@ def run_experiment(exp, config, output_root, progress_file, selected_steps,
         manifest_flag = ""
         if cohort_id:
             # Manifest 放在 cohort 的 ft_datasets 目录下（以 cohort 中第一个实验名作为基础路径）
-            cohort_first = cohort_id
-            manifest_path = WORK_DIR / "data" / "ft_datasets" / cohort_first / "split_manifest.json"
+            cohort_key = (cohort_id, exp.get("seed", 42))
+            manifest_path = cohort_dir / "split_manifest.json"
 
-            if cohort_id not in _cohort_manifest_written:
+            if manifest_path.exists():
+                manifest_flag = f"--split-manifest {manifest_path}"
+            elif cohort_key not in _cohort_manifest_written:
                 # 第一个变体：写入 manifest
                 manifest_flag = f"--write-split-manifest {manifest_path}"
-                _cohort_manifest_written.add(cohort_id)
+                _cohort_manifest_written.add(cohort_key)
             else:
                 # 后续变体：复用 manifest
                 manifest_flag = f"--split-manifest {manifest_path}"
@@ -272,9 +641,13 @@ def run_experiment(exp, config, output_root, progress_file, selected_steps,
             f"--input {sampled_path} "
             f"--name {name} "
             f"--split "
-            f"--val-ratio 0.05 "
+            f"--val-ratio {exp.get('val_ratio', 0.05)} "
+            f"--seed {exp.get('seed', 42)} "
+            f"--report-token-lengths --tokenizer-path {config.get('tokenizer', model_name)} "
+            f"--cutoff-len {exp.get('cutoff_len', 512)} "
             f"{binary_flag} "
             f"{mr_mode_flag} "
+            f"{instruction_template_flag} "
             f"{strict_flag} "
             f"{manifest_flag}",
             f"转换 {name} (mode={mr_mode})",
@@ -294,6 +667,38 @@ def run_experiment(exp, config, output_root, progress_file, selected_steps,
     elif resume and step_completed(progress, name, "finetune"):
         print(f"    ⏩ 跳过（已完成）")
     else:
+        report_path = ft_data_dir / "conversion_report.json"
+        manifest_path = cohort_dir / "split_manifest.json"
+        if not report_path.exists() or not manifest_path.exists():
+            if dry_run:
+                raise RuntimeError("训练 dry-run 前仍需现有 conversion report 和 split manifest")
+            raise RuntimeError("训练前缺少 conversion report 或 split manifest")
+        conversion = json.loads(report_path.read_text(encoding="utf-8"))
+        enforce_stage2_training_gate(config, exp, conversion)
+        if dry_run:
+            print("    [DRY-RUN] Stage 2 gate 已验证为 PASS/OPEN")
+            print("    [DRY-RUN] run_signature 将使用现有 conversion 产物计算并校验")
+        test_signatures = {}
+        for test_kind, mapping in config.get("test_sets", {}).items():
+            for ds_name, value in mapping.items():
+                path = resolve_workspace_path(value)
+                if path.is_file():
+                    test_signatures[f"{test_kind}:{ds_name}"] = file_sha256(path)
+                elif path.is_dir():
+                    test_signatures[f"{test_kind}:{ds_name}"] = canonical_sha256(
+                        [(str(p.relative_to(path)), file_sha256(p))
+                         for p in sorted(path.rglob("*.json"))])
+        if not dry_run:
+            signature = build_run_signature(
+            exp, config, git_sha, conversion.get("data_signature"),
+            conversion.get("manifest_hash"), test_signatures)
+        signature_path = exp_dir / "run_signature.json"
+        if not dry_run and signature_path.exists():
+            existing = json.loads(signature_path.read_text())
+            if existing.get("run_signature") != signature["run_signature"]:
+                raise RuntimeError("run_signature 不匹配，拒绝 resume/reuse")
+        elif not dry_run:
+            signature_path.write_text(json.dumps(signature, indent=2, ensure_ascii=False))
         yaml_content = build_yaml(exp, model_name, template, output_root)
         yaml_path = WORK_DIR / f"ft_config_{name}.yaml"
         if not dry_run:
@@ -689,6 +1094,11 @@ def main():
         default=None,
         help="覆盖多 seed 汇总；默认使用 <output-root>/RESULTS.md",
     )
+    parser.add_argument(
+        "--initialize-cohort-metadata",
+        action="store_true",
+        help="显式验证并为旧 cohort 创建缺失的 cohort_meta/sampling_report；默认拒绝缺元数据复用",
+    )
     args = parser.parse_args()
 
     config_path = Path(args.config)
@@ -726,6 +1136,8 @@ def main():
     )
 
     experiments = config.get("experiments", [])
+    defaults = config.get("experiment_defaults", {})
+    experiments = [{**defaults, **experiment} for experiment in experiments]
     if not experiments:
         print("❌ 配置文件中没有定义实验 (experiments)")
         sys.exit(1)
@@ -782,6 +1194,7 @@ def main():
                 set(args.steps),
                 dry_run=args.dry_run,
                 resume=args.resume,
+                initialize_cohort_metadata=args.initialize_cohort_metadata,
             )
             results.append({"name": exp_seed["name"], "ok": ok, "seed": seed})
 
@@ -819,6 +1232,8 @@ def main():
     if not args.dry_run:
         print(f"\n  输出目录: {output_root}")
     print()
+    if success != total:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

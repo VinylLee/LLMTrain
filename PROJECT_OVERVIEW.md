@@ -100,6 +100,8 @@ output/<model>/<dataset>/<mr>.jsonl
 - 临时生成根目录 `ft_config_<实验_seed>.yaml`，训练结束后删除；
 - 强制 Hugging Face/Transformers 离线模式，使用本地模型缓存；
 - 支持 `--steps`、`--output-root`、`--progress-file`、`--result-file`，并保证 `--dry-run` 不写目录、元数据或临时 YAML；
+- cohort 复用前强制校验 `cohort_meta.json`、`sampling_report.json`、sample/pair manifest 哈希、数据签名与完整 group multiset；旧 cohort 缺元数据时默认拒绝，只有显式 `--initialize-cohort-metadata` 才会在验证通过后补建；
+- MR-as-Instruction 配置可声明 `stage2_gate`；进入 finetune 前必须同时满足 Stage 2 `PASS`、training gate `OPEN`，并核对 cohort/manifest/order/template 与当前 mode 的转换文件哈希；
 - 单 seed 时生成 `SUMMARY.md`，多 seed 时生成 `RESULTS.md`。
 
 当前推荐命令：
@@ -137,6 +139,7 @@ python scripts/run_batch_experiments.py \
 - `--stratify` 时按组内多数标签分层，并把目标数近似均分到各层；
 - 因为不拆散组，实际条数可能略大于 `target`；
 - 输出 `sampled.json` 与 `sampled.pair_ids.json`，后者记录 seed、target 和被选 pair ID。
+- 同时输出 `sampling_report.json`，记录 source/sample 文件 SHA-256、顺序无关数据签名、group/sample 数、pair ID 签名和分布。
 
 这种分组是实验可比性的关键，不能改成逐行独立随机采样。
 
@@ -151,14 +154,17 @@ python scripts/run_batch_experiments.py \
 - **按 `pair_id` group 拆分** train/validation，同一 pair 的所有样本不会跨 split；
 - 支持 `--split-manifest` / `--write-split-manifest`：同一 cohort 的不同 instruction 变体复用相同的 train/validation 划分；
 - `--strict-pairing` 模式：未知 `mr_id`、增强样本缺 source、多 source group 等直接报错；
-- 输出 `conversion_report.json`，包含样本数、group 数、MR 分布、标签分布、fallback 统计等；
+- 输出 `conversion_report.json`，包含样本数、group 数、MR 分布、标签分布、fallback 统计，以及实际 tokenizer 的 train/validation 整体与 by-MR token 长度统计；
+- 当前 MR-as-Instruction template schema 为 v2；reference premise/hypothesis 使用显式 XML 风格边界，避免原文双引号造成歧义；
+- train/validation 在转换前按稳定 sample key 排序，同一 cohort/seed 的不同 mode 在相同 index 对应同一底层样本；
+- conversion report 记录 template/描述字典哈希、ordered sample signature 与转换后 train/validation JSONL SHA-256；shuffled mode 另记录 true→assigned confusion matrix；
 - 自动判断二分类的 `--binary` 参数保留但标记为已弃用（RTE 已从主实验移除）。
 
 转换结果格式：
 
 ```json
 {
-  "instruction": "Reference sample:\nPremise: \"...\"\nHypothesis: \"...\"\n\nTransformation applied...",
+  "instruction": "Reference sample:\n<reference_premise>\n...\n</reference_premise>\n<reference_hypothesis>\n...\n</reference_hypothesis>\n\nTransformation applied...",
   "input": "Premise: ...\nHypothesis: ...",
   "output": "entailment"
 }
@@ -336,6 +342,12 @@ Gemma 具体准确率见 `output/experiments/gemma3_4b_nli/RESULTS.md`；Llama �
 - 独立输出：`output/experiments/llama32_3b_nli/`；
 - 21 组全部完成微调和测试（2026-07-20 ~ 2026-07-21），168 个测试 JSONL 文件生成并验证；
 - 数据采样与 Gemma 对应文件逐字节一致，确保"仅换基座模型"的公平对照；
+
+### 5.4 MR-as-Instruction Pilot Stage 2（2026-07-22）
+
+`experiments_config_mrinstr_pilot.json` 定义 MNLI 4413、seed 42 的六种 conversion mode：`none`、`operation_only`、`pair_only`、`pair_operation`、`shuffled_operation`、`full_oracle`。六种 mode 共享同一 sampled file 与 split manifest，均生成 train 4174 / validation 239。
+
+`scripts/validate_mrinstr_conversion.py` 对 cohort 复用元数据、模板版本、行序、manifest/data signature、转换文件 SHA-256、validation generic instruction、pair/shuffled 对齐、shuffled confusion matrix 和实际 tokenizer 整体/by-MR 长度做自动验证。当前 125/125 自动检查通过。runner 也会在 finetune 前强制核对 Stage 2 `PASS/OPEN`，当前负向 dry-run 已确认会在训练命令生成前阻断。四类数据质量风险仍使 Stage 2 总体为 FAIL、训练门槛为 BLOCKED；Stage 3/4 尚未启动。人工修订/标注协议见 `.research/MR_INSTRUCTION_DATA_REVIEW_PROTOCOL.md`，交接见 `.research/MR_INSTRUCTION_STAGE2_HANDOFF.md`，ignored 报告见 `artifacts/mrinstr_validation/`。
 
 ## 6. 结果文件的权威性
 

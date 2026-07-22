@@ -38,7 +38,7 @@ import argparse
 import random
 import hashlib
 from pathlib import Path
-from collections import Counter
+from collections import Counter, defaultdict
 
 
 def serialize_counter_keys(counter):
@@ -95,13 +95,13 @@ MR_OPERATION_DESCRIPTIONS = {
         "One or more content words were replaced with context-appropriate antonyms.",
 
     "composite_flip":
-        "Multiple controlled transformations were applied to the text.",
+        "Several controlled textual edits were applied.",
 
     "composite_inv":
-        "Multiple controlled transformations were applied to the text.",
+        "Multiple transformations were performed.",
 
     "composite_neutral":
-        "Multiple controlled transformations were applied to the text.",
+        "A combination of text modifications was used.",
 
     "conditional_clause":
         "A conditional clause was added to one component.",
@@ -196,6 +196,8 @@ INSTRUCTION_NLI_BINARY = (
     "Answer with exactly one label: entailment or not_entailment."
 )
 
+INSTRUCTION_TEMPLATE_VERSION = 2
+
 INSTRUCTION_TEMPLATES = {
     "none": "{nli_instruction}",
 
@@ -207,15 +209,23 @@ INSTRUCTION_TEMPLATES = {
 
     "pair_only": (
         "Reference sample:\n"
-        'Premise: "{original_premise}"\n'
-        'Hypothesis: "{original_hypothesis}"\n\n'
+        "<reference_premise>\n"
+        "{original_premise}\n"
+        "</reference_premise>\n"
+        "<reference_hypothesis>\n"
+        "{original_hypothesis}\n"
+        "</reference_hypothesis>\n\n"
         "{nli_instruction}"
     ),
 
     "pair_operation": (
         "Reference sample:\n"
-        'Premise: "{original_premise}"\n'
-        'Hypothesis: "{original_hypothesis}"\n\n'
+        "<reference_premise>\n"
+        "{original_premise}\n"
+        "</reference_premise>\n"
+        "<reference_hypothesis>\n"
+        "{original_hypothesis}\n"
+        "</reference_hypothesis>\n\n"
         "Transformation applied to create the current sample:\n"
         "{operation_description}\n\n"
         "{nli_instruction}"
@@ -223,8 +233,12 @@ INSTRUCTION_TEMPLATES = {
 
     "shuffled_operation": (
         "Reference sample:\n"
-        'Premise: "{original_premise}"\n'
-        'Hypothesis: "{original_hypothesis}"\n\n'
+        "<reference_premise>\n"
+        "{original_premise}\n"
+        "</reference_premise>\n"
+        "<reference_hypothesis>\n"
+        "{original_hypothesis}\n"
+        "</reference_hypothesis>\n\n"
         "Transformation applied to create the current sample:\n"
         "{operation_description}\n\n"
         "{nli_instruction}"
@@ -232,8 +246,12 @@ INSTRUCTION_TEMPLATES = {
 
     "relation_aware": (
         "Reference sample:\n"
-        'Premise: "{original_premise}"\n'
-        'Hypothesis: "{original_hypothesis}"\n\n'
+        "<reference_premise>\n"
+        "{original_premise}\n"
+        "</reference_premise>\n"
+        "<reference_hypothesis>\n"
+        "{original_hypothesis}\n"
+        "</reference_hypothesis>\n\n"
         "Transformation applied to create the current sample:\n"
         "{operation_description}\n\n"
         "Expected relation effect:\n"
@@ -243,8 +261,12 @@ INSTRUCTION_TEMPLATES = {
 
     "full_oracle": (
         "Reference sample:\n"
-        'Premise: "{original_premise}"\n'
-        'Hypothesis: "{original_hypothesis}"\n'
+        "<reference_premise>\n"
+        "{original_premise}\n"
+        "</reference_premise>\n"
+        "<reference_hypothesis>\n"
+        "{original_hypothesis}\n"
+        "</reference_hypothesis>\n"
         "Reference label: {original_label}\n\n"
         "Transformation:\n"
         "{operation_description}\n\n"
@@ -264,6 +286,30 @@ MODES_REQUIRING_ORIGINAL_LABEL = frozenset({"full_oracle"})
 
 # 需要 relation effect 的模式
 MODES_REQUIRING_RELATION_EFFECT = frozenset({"relation_aware", "full_oracle"})
+
+MODES_REQUIRING_OPERATION = frozenset({
+    "operation_only", "pair_operation", "shuffled_operation",
+    "relation_aware", "full_oracle",
+})
+
+
+def canonical_sha256(value):
+    """Return SHA-256 of canonical UTF-8 JSON."""
+    payload = json.dumps(
+        value,
+        sort_keys=True,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+INSTRUCTION_TEMPLATE_HASH = canonical_sha256({
+    "version": INSTRUCTION_TEMPLATE_VERSION,
+    "templates": INSTRUCTION_TEMPLATES,
+})
+OPERATION_DESCRIPTION_HASH = canonical_sha256(MR_OPERATION_DESCRIPTIONS)
+RELATION_EFFECT_HASH = canonical_sha256(MR_RELATION_EFFECTS)
 
 
 # ============================================================
@@ -429,6 +475,7 @@ def build_instruction_for_sample(
     original_label="",
     is_binary=False,
     is_original=False,
+    nli_instruction=None,
 ):
     """根据 mode 构建 instruction 文本。
 
@@ -446,7 +493,7 @@ def build_instruction_for_sample(
     Returns:
         Alpaca 格式 dict: {"instruction": ..., "input": ..., "output": ...}
     """
-    nli_instruction = INSTRUCTION_NLI_BINARY if is_binary else INSTRUCTION_NLI
+    nli_instruction = nli_instruction or (INSTRUCTION_NLI_BINARY if is_binary else INSTRUCTION_NLI)
 
     # input 始终是当前样本
     input_text = (
@@ -550,28 +597,77 @@ def select_shuffled_descriptions(samples, mr_ids, seed):
     保持样本和标签不变，只打乱操作描述。
     确保尽可能不分配回原 MR。
     """
-    rng = random.Random(seed)
-    n = len(samples)
+    del mr_ids  # retained for API compatibility
+    indexed = []
+    result = ["none"] * len(samples)
+    for index, sample in enumerate(samples):
+        mr_id = normalize_mr_id(sample.get("mr_id"))
+        if mr_id != "none":
+            description = MR_OPERATION_DESCRIPTIONS.get(mr_id, "")
+            indexed.append((compute_sample_key(sample), index, mr_id, description))
+    if not indexed:
+        return result
+    indexed.sort(key=lambda item: item[0])
+    counts = Counter(item[3] for item in indexed)
+    if max(counts.values()) * 2 > len(indexed):
+        raise ValueError(f"无法生成零固定点描述重排: {dict(counts)}")
+    # A rotation by the largest bucket size is a multiset derangement whenever
+    # the feasibility condition above holds. Seed deterministically rotates the
+    # stable sample order without changing description frequencies.
+    offset = max(counts.values())
+    ordered = sorted(indexed, key=lambda item: (item[3], item[0]))
+    rotation = seed % len(ordered)
+    ordered = ordered[rotation:] + ordered[:rotation]
+    assigned = [ordered[(i + offset) % len(ordered)][2] for i in range(len(ordered))]
+    for item, assigned_mr in zip(ordered, assigned):
+        if MR_OPERATION_DESCRIPTIONS[assigned_mr] == item[3]:
+            raise ValueError("描述 derangement 出现固定点")
+        result[item[1]] = assigned_mr
+    return result
 
-    # 为每个非 none MR 分配一个不同的随机 MR ID
-    mr_id_list = list(mr_ids)
-    # 过滤掉 "none"
-    non_none = [m for m in mr_id_list if m != "none"]
 
-    shuffled = []
-    for i in range(n):
-        current_mr = normalize_mr_id(samples[i].get("mr_id"))
-        if current_mr == "none":
-            shuffled.append(current_mr)
-        else:
-            # 从非 none 的 MR 中选择一个不同的
-            pool = [m for m in non_none if m != current_mr]
-            if pool:
-                shuffled.append(rng.choice(pool))
-            else:
-                shuffled.append(rng.choice(non_none))
+def build_shuffle_audit(samples, assigned_mr_ids, shuffle_seed):
+    """Build a deterministic audit for a shuffled-operation assignment."""
+    augmented_pairs = []
+    confusion = defaultdict(Counter)
+    for sample, assigned_mr in zip(samples, assigned_mr_ids):
+        true_mr = normalize_mr_id(sample.get("mr_id"))
+        if true_mr == "none":
+            continue
+        true_description = MR_OPERATION_DESCRIPTIONS[true_mr]
+        assigned_description = MR_OPERATION_DESCRIPTIONS[assigned_mr]
+        augmented_pairs.append({
+            "sample_key": compute_sample_key(sample),
+            "true_mr_id": true_mr,
+            "assigned_mr_id": assigned_mr,
+            "true_description": true_description,
+            "assigned_description": assigned_description,
+        })
+        confusion[true_description][assigned_description] += 1
 
-    return shuffled
+    true_counts = Counter(p["true_description"] for p in augmented_pairs)
+    assigned_counts = Counter(p["assigned_description"] for p in augmented_pairs)
+    fixed_points = sum(
+        p["true_description"] == p["assigned_description"]
+        for p in augmented_pairs
+    )
+    if true_counts != assigned_counts or fixed_points:
+        raise ValueError("shuffled audit 失败：频率不一致或存在描述固定点")
+
+    return {
+        "shuffle_seed": shuffle_seed,
+        "total_augmented": len(augmented_pairs),
+        "fixed_point_count": fixed_points,
+        "true_description_counts": dict(sorted(true_counts.items())),
+        "assigned_description_counts": dict(sorted(assigned_counts.items())),
+        "true_to_assigned_confusion_matrix": {
+            true_description: dict(sorted(assignments.items()))
+            for true_description, assignments in sorted(confusion.items())
+        },
+        "mapping_signature": canonical_sha256(
+            sorted(augmented_pairs, key=lambda pair: pair["sample_key"])
+        ),
+    }
 
 
 # ============================================================
@@ -586,6 +682,7 @@ def convert_to_alpaca(
     relation_effects=None,
     shuffled_descriptions=None,
     strict=False,
+    nli_instruction=None,
 ):
     """将 NLI 样本转换为 Alpaca 格式，支持 MR instruction 模式。
 
@@ -628,12 +725,14 @@ def convert_to_alpaca(
         if mode == "shuffled_operation" and shuffled_descriptions is not None:
             effective_mr_id = shuffled_descriptions[i]
 
-        # 获取操作描述
-        operation_desc = operation_descriptions.get(effective_mr_id, "")
-        if not operation_desc and effective_mr_id != "none":
-            missing_operation += 1
-            if strict:
-                raise ValueError(f"缺少操作描述: mr_id={effective_mr_id}")
+        # 只在实际使用 operation description 的模式检查描述完整性。
+        operation_desc = ""
+        if mode in MODES_REQUIRING_OPERATION:
+            operation_desc = operation_descriptions.get(effective_mr_id, "")
+            if not operation_desc and effective_mr_id != "none":
+                missing_operation += 1
+                if strict:
+                    raise ValueError(f"缺少操作描述: mr_id={effective_mr_id}")
 
         # 获取关系效果描述（仅某些 mode 需要）
         relation_effect = ""
@@ -668,6 +767,7 @@ def convert_to_alpaca(
             original_label=original_label,
             is_binary=is_binary,
             is_original=(effective_mr_id == "none"),
+            nli_instruction=nli_instruction,
         )
 
         converted.append(result)
@@ -690,11 +790,59 @@ def convert_to_alpaca(
 # ============================================================
 def compute_data_signature(samples):
     """计算样本数据的签名（用于检测数据变更）"""
-    h = hashlib.sha256()
-    for s in samples:
-        line = json.dumps(s, sort_keys=True, ensure_ascii=False)
-        h.update(line.encode("utf-8"))
-    return h.hexdigest()[:16]
+    canonical = []
+    fields = ("pair_id", "mr_id", "premise", "hypothesis", "label", "idx", "id", "_source")
+    for sample in samples:
+        canonical.append({key: sample.get(key) for key in fields if key in sample})
+    canonical.sort(key=lambda row: json.dumps(row, sort_keys=True, ensure_ascii=False, separators=(",", ":")))
+    payload = json.dumps(canonical, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def compute_sample_key(sample):
+    group_key = sample.get("_group_key")
+    if isinstance(group_key, tuple):
+        group_key = list(group_key)
+    payload = {
+        key: sample.get(key)
+        for key in (
+            "pair_id", "mr_id", "premise", "hypothesis", "label",
+            "idx", "id", "_source",
+        )
+        if key in sample
+    }
+    if group_key is not None:
+        payload["_group_key"] = group_key
+    return canonical_sha256(payload)
+
+
+def sort_samples_by_stable_key(samples):
+    """Return samples in mode-independent stable-key order."""
+    return sorted(
+        samples,
+        key=lambda sample: (
+            compute_sample_key(sample),
+            json.dumps(sample, sort_keys=True, ensure_ascii=False, default=list),
+        ),
+    )
+
+
+def compute_ordered_sample_signature(train_samples, val_samples):
+    """Hash the exact train/validation sample-key order used for conversion."""
+    return canonical_sha256({
+        "version": 1,
+        "train": [compute_sample_key(sample) for sample in train_samples],
+        "validation": [compute_sample_key(sample) for sample in val_samples],
+    })
+
+
+def converted_rows_sha256(rows):
+    """Hash the exact UTF-8 JSONL bytes emitted by save_jsonl."""
+    digest = hashlib.sha256()
+    for row in rows:
+        line = json.dumps(row, ensure_ascii=False) + "\n"
+        digest.update(line.encode("utf-8"))
+    return digest.hexdigest()
 
 
 def save_split_manifest(
@@ -705,27 +853,32 @@ def save_split_manifest(
     val_group_ids,
     source_files,
     data_signature,
+    train_sample_count=0,
+    val_sample_count=0,
 ):
     """保存 split manifest 到 JSON 文件"""
     manifest = {
+        "schema_version": 2,
+        "signature_version": 1,
         "seed": seed,
         "val_ratio": val_ratio,
         "group_key_version": 1,
         "source_files": source_files,
         "train_group_ids": sorted(train_group_ids, key=str),
         "val_group_ids": sorted(val_group_ids, key=str),
-        "train_sample_count": 0,  # 由调用者填充
-        "val_sample_count": 0,
+        "all_group_count": len(train_group_ids) + len(val_group_ids),
+        "train_group_count": len(train_group_ids),
+        "val_group_count": len(val_group_ids),
+        "train_sample_count": train_sample_count,
+        "val_sample_count": val_sample_count,
         "data_signature": data_signature,
-        "sha256": "",  # 内部哈希
     }
 
     manifest_path = Path(manifest_path)
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # 自哈希
-    content = json.dumps(manifest, sort_keys=True, ensure_ascii=False)
-    manifest["sha256"] = hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
+    content = json.dumps(manifest, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    manifest["sha256"] = hashlib.sha256(content.encode("utf-8")).hexdigest()
 
     manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False))
     return manifest
@@ -736,16 +889,36 @@ def load_split_manifest(manifest_path):
     manifest_path = Path(manifest_path)
     if not manifest_path.exists():
         raise FileNotFoundError(f"Split manifest 不存在: {manifest_path}")
-    with open(manifest_path) as f:
-        return json.load(f)
+    with open(manifest_path, encoding="utf-8") as f:
+        manifest = json.load(f)
+    stored_hash = manifest.get("sha256")
+    payload = dict(manifest)
+    payload.pop("sha256", None)
+    calculated_hash = canonical_sha256(payload)
+    if not stored_hash or stored_hash != calculated_hash:
+        raise ValueError(
+            f"Split manifest self-hash 不匹配: stored={stored_hash} "
+            f"calculated={calculated_hash}"
+        )
+    return manifest
+
+
+def deserialize_manifest_group_ids(manifest, field):
+    values = manifest.get(field)
+    if not isinstance(values, list):
+        raise ValueError(f"manifest {field} 必须是 list")
+    normalized = [tuple(value) if isinstance(value, list) else value for value in values]
+    if len(normalized) != len(set(normalized)):
+        raise ValueError(f"manifest {field} 含重复 group ID")
+    return set(normalized)
 
 
 def verify_manifest(manifest, train_group_ids, val_group_ids, data_signature):
     """校验 manifest 与当前数据的 group IDs 一致"""
     expected_train = set(sorted(train_group_ids, key=str))
     expected_val = set(sorted(val_group_ids, key=str))
-    actual_train = set(manifest["train_group_ids"])
-    actual_val = set(manifest["val_group_ids"])
+    actual_train = deserialize_manifest_group_ids(manifest, "train_group_ids")
+    actual_val = deserialize_manifest_group_ids(manifest, "val_group_ids")
 
     if expected_train != actual_train or expected_val != actual_val:
         raise ValueError(
@@ -758,12 +931,143 @@ def verify_manifest(manifest, train_group_ids, val_group_ids, data_signature):
             f"  val 差集: {expected_val - actual_val}"
         )
 
-    if data_signature and manifest.get("data_signature"):
-        if data_signature != manifest["data_signature"]:
-            print(
-                f"  ⚠️  数据签名不匹配！"
-                f"  manifest: {manifest['data_signature']}, 当前: {data_signature}"
-            )
+    if manifest.get("schema_version") != 2:
+        raise ValueError(f"不支持的 manifest schema: {manifest.get('schema_version')}")
+    if data_signature != manifest.get("data_signature"):
+        raise ValueError(f"数据签名不匹配: manifest={manifest.get('data_signature')} current={data_signature}")
+
+
+def validate_manifest_for_groups(manifest, groups, seed, val_ratio, data_signature):
+    all_ids = {g["group_key"] for g in groups}
+    train_ids = deserialize_manifest_group_ids(manifest, "train_group_ids")
+    val_ids = deserialize_manifest_group_ids(manifest, "val_group_ids")
+    if train_ids & val_ids:
+        raise ValueError("manifest train/validation groups 有交集")
+    if train_ids | val_ids != all_ids:
+        raise ValueError("manifest groups 未严格覆盖当前数据")
+    if manifest.get("seed") != seed:
+        raise ValueError(f"manifest seed 不匹配: {manifest.get('seed')} != {seed}")
+    if abs(float(manifest.get("val_ratio")) - float(val_ratio)) > 1e-12:
+        raise ValueError("manifest val_ratio 不匹配")
+    if manifest.get("all_group_count") != len(all_ids):
+        raise ValueError("manifest all_group_count 不匹配")
+    if manifest.get("train_group_count") != len(train_ids):
+        raise ValueError("manifest train_group_count 不匹配")
+    if manifest.get("val_group_count") != len(val_ids):
+        raise ValueError("manifest val_group_count 不匹配")
+    group_sizes = {group["group_key"]: len(group["samples"]) for group in groups}
+    current_train_sample_count = sum(group_sizes[group_id] for group_id in train_ids)
+    current_val_sample_count = sum(group_sizes[group_id] for group_id in val_ids)
+    if manifest.get("train_sample_count") != current_train_sample_count:
+        raise ValueError(
+            "manifest train_sample_count 不匹配: "
+            f"{manifest.get('train_sample_count')} != {current_train_sample_count}"
+        )
+    if manifest.get("val_sample_count") != current_val_sample_count:
+        raise ValueError(
+            "manifest val_sample_count 不匹配: "
+            f"{manifest.get('val_sample_count')} != {current_val_sample_count}"
+        )
+    verify_manifest(manifest, train_ids, val_ids, data_signature)
+    return train_ids, val_ids
+
+
+def percentile(values, q):
+    if not values:
+        return 0
+    ordered = sorted(values)
+    index = int(round((len(ordered) - 1) * q))
+    return ordered[index]
+
+
+def summarize_token_lengths(lengths, cutoff_len):
+    over = sum(length > cutoff_len for length in lengths)
+    return {"count": len(lengths), "p50": percentile(lengths, .50),
+            "p90": percentile(lengths, .90), "p95": percentile(lengths, .95),
+            "p99": percentile(lengths, .99), "max": max(lengths, default=0),
+            "over_cutoff_count": over,
+            "over_cutoff_ratio": over / len(lengths) if lengths else 0.0}
+
+
+def count_row_token_length(tokenizer, row):
+    messages = [
+        {"role": "user", "content": row["instruction"] + "\n\n" + row["input"]},
+        {"role": "assistant", "content": row["output"]},
+    ]
+    try:
+        length = len(tokenizer.apply_chat_template(
+            messages,
+            tokenize=True,
+            add_generation_prompt=False,
+        ))
+        return length, "apply_chat_template"
+    except (AttributeError, ValueError, NotImplementedError):
+        text = "\n\n".join(message["content"] for message in messages)
+        return len(tokenizer(text)["input_ids"]), "tokenizer_fallback"
+
+
+def summarize_token_lengths_by_mr(lengths, samples, cutoff_len):
+    if samples is None:
+        return {}
+    if len(lengths) != len(samples):
+        raise ValueError("token lengths 与 samples 数量不一致")
+    buckets = {}
+    for length, sample in zip(lengths, samples):
+        mr_id = normalize_mr_id(sample.get("mr_id"))
+        buckets.setdefault(mr_id, []).append(length)
+    return {
+        mr_id: summarize_token_lengths(values, cutoff_len)
+        for mr_id, values in sorted(buckets.items())
+    }
+
+
+def build_token_length_report(
+    train_rows,
+    val_rows,
+    tokenizer_path,
+    cutoff_len,
+    train_samples=None,
+    val_samples=None,
+    tokenizer=None,
+):
+    if tokenizer is None:
+        from transformers import AutoTokenizer
+        tokenizer = AutoTokenizer.from_pretrained(
+            tokenizer_path,
+            trust_remote_code=True,
+        )
+    methods = Counter()
+
+    def count_rows(rows):
+        lengths = []
+        for row in rows:
+            length, method = count_row_token_length(tokenizer, row)
+            lengths.append(length)
+            methods[method] += 1
+        return lengths
+
+    train_lengths = count_rows(train_rows)
+    val_lengths = count_rows(val_rows)
+    counting_method = (
+        "tokenizer_fallback" if methods.get("tokenizer_fallback")
+        else "apply_chat_template"
+    )
+    return {
+        "counting_method": counting_method,
+        "counting_method_counts": dict(sorted(methods.items())),
+        "tokenizer_path": tokenizer_path,
+        "cutoff_len": cutoff_len,
+        "train": summarize_token_lengths(train_lengths, cutoff_len),
+        "validation": summarize_token_lengths(val_lengths, cutoff_len),
+        "by_mr": {
+            "train": summarize_token_lengths_by_mr(
+                train_lengths, train_samples, cutoff_len
+            ),
+            "validation": summarize_token_lengths_by_mr(
+                val_lengths, val_samples, cutoff_len
+            ),
+        },
+    }
 
 
 # ============================================================
@@ -942,6 +1246,14 @@ def parse_args():
                         help="写入共享 split manifest 路径")
     parser.add_argument("--report-token-lengths", action="store_true", default=False,
                         help="输出 token 长度统计（需要 transformers）")
+    parser.add_argument("--tokenizer-path", type=str, default=None)
+    parser.add_argument("--cutoff-len", type=int, default=512)
+    parser.add_argument(
+        "--instruction-template-version",
+        type=int,
+        default=INSTRUCTION_TEMPLATE_VERSION,
+        help=f"MR instruction template schema version (current: {INSTRUCTION_TEMPLATE_VERSION})",
+    )
 
     # 兼容旧参数
     parser.add_argument("--binary", action="store_true", default=None,
@@ -965,6 +1277,13 @@ def main():
     args = parse_args()
     random.seed(args.seed)
 
+    if args.instruction_template_version != INSTRUCTION_TEMPLATE_VERSION:
+        raise ValueError(
+            "不支持的 instruction template version: "
+            f"{args.instruction_template_version}; "
+            f"当前仅支持 v{INSTRUCTION_TEMPLATE_VERSION}"
+        )
+
     # 兼容旧版 --binary（RTE 已移除，但仍保持功能以防外部调用）
     is_binary = args.binary if args.binary is not None else False
     task_type = "nli-binary" if is_binary else "nli"
@@ -972,6 +1291,7 @@ def main():
         print("  ⚠️  二分类模式已启用。注意：RTE 已从主实验中移除。")
 
     mode = args.mr_instruction_mode
+    active_manifest = None
 
     # 确定使用的 label_names 和 nli instruction
     label_names = LABEL_NAMES_BINARY if is_binary else LABEL_NAMES_3CLASS
@@ -1058,16 +1378,17 @@ def main():
         if args.split_manifest:
             # 复用已有 split manifest
             manifest = load_split_manifest(args.split_manifest)
+            active_manifest = manifest
             print(f"  📋 加载 split manifest: {args.split_manifest}")
 
+            data_signature = compute_data_signature(all_samples)
+            manifest_train, manifest_val = validate_manifest_for_groups(
+                manifest, groups, args.seed, args.val_ratio, data_signature)
             # 构建 group_key -> group 索引
             group_map = {g["group_key"]: g for g in groups}
 
             # 从 manifest 读取 group IDs
-            train_ids = set(tuple(i) if isinstance(i, list) else i
-                           for i in manifest["train_group_ids"])
-            val_ids = set(tuple(i) if isinstance(i, list) else i
-                         for i in manifest["val_group_ids"])
+            train_ids, val_ids = manifest_train, manifest_val
 
             # 验证所有 ID 都在当前数据中
             all_ids = set(g["group_key"] for g in groups)
@@ -1099,7 +1420,7 @@ def main():
             if args.write_split_manifest:
                 train_ids = [g["group_key"] for g in train_groups]
                 val_ids = [g["group_key"] for g in val_groups]
-                save_split_manifest(
+                active_manifest = save_split_manifest(
                     manifest_path=args.write_split_manifest,
                     seed=args.seed,
                     val_ratio=args.val_ratio,
@@ -1107,6 +1428,8 @@ def main():
                     val_group_ids=val_ids,
                     source_files=args.input,
                     data_signature=compute_data_signature(all_samples),
+                    train_sample_count=sum(len(g["samples"]) for g in train_groups),
+                    val_sample_count=sum(len(g["samples"]) for g in val_groups),
                 )
                 print(f"  📋 保存 split manifest: {args.write_split_manifest}")
 
@@ -1131,18 +1454,25 @@ def main():
     # 7. 生成 shuffled 描述（若需要）
     # ============================
     shuffled_descriptions = None
+    shuffle_audit = None
     if mode == "shuffled_operation":
-        train_samples_flat = flatten_groups(train_groups)
+        train_samples_flat = sort_samples_by_stable_key(flatten_groups(train_groups))
         all_mr_ids = set(normalize_mr_id(s.get("mr_id")) for s in all_samples)
+        shuffle_seed = args.seed + 999
         shuffled_descriptions = select_shuffled_descriptions(
-            train_samples_flat, all_mr_ids, seed=args.seed + 999
+            train_samples_flat, all_mr_ids, seed=shuffle_seed
+        )
+        shuffle_audit = build_shuffle_audit(
+            train_samples_flat,
+            shuffled_descriptions,
+            shuffle_seed,
         )
         print(f"  🔀 Shuffled operation descriptions 已生成")
 
     # ============================
     # 8. 转换：训练集（按指定 mode）
     # ============================
-    train_samples = flatten_groups(train_groups)
+    train_samples = sort_samples_by_stable_key(flatten_groups(train_groups))
     print(f"\n  🔄 转换训练集（mode={mode}）: {len(train_samples)} 条")
 
     # 准备操作描述 map（过滤掉不在 ANY_MR 中的 key）
@@ -1158,6 +1488,7 @@ def main():
         relation_effects=rel_map if mode in MODES_REQUIRING_RELATION_EFFECT else None,
         shuffled_descriptions=shuffled_descriptions,
         strict=args.strict_pairing,
+        nli_instruction=nli_instruction,
     )
 
     print(f"  📈 训练集标签分布: {dict(train_report['label_distribution'])}")
@@ -1167,14 +1498,16 @@ def main():
     # ============================
     val_converted = []
     val_report = {}
+    val_samples = []
     if val_groups:
-        val_samples = flatten_groups(val_groups)
+        val_samples = sort_samples_by_stable_key(flatten_groups(val_groups))
         print(f"\n  🔄 转换验证集（mode=none）: {len(val_samples)} 条")
         val_converted, val_report = convert_to_alpaca(
             val_samples,
             mode="none",
             is_binary=is_binary,
             strict=False,
+            nli_instruction=nli_instruction,
         )
         print(f"  📈 验证集标签分布: {dict(val_report.get('label_distribution', {}))}")
 
@@ -1192,6 +1525,18 @@ def main():
     # ============================
     all_converted = train_converted + val_converted
     instr_lengths = [len(c["instruction"]) for c in all_converted]
+    token_report = None
+    if args.report_token_lengths:
+        if not args.tokenizer_path:
+            raise ValueError("--report-token-lengths 需要 --tokenizer-path")
+        token_report = build_token_length_report(
+            train_converted,
+            val_converted,
+            args.tokenizer_path,
+            args.cutoff_len,
+            train_samples=train_samples,
+            val_samples=val_samples,
+        )
 
     # ============================
     # 12. 保存 + 注册
@@ -1238,6 +1583,23 @@ def main():
             "max": max(instr_lengths) if instr_lengths else 0,
             "samples": len(instr_lengths),
         },
+        "data_signature": compute_data_signature(all_samples),
+        "manifest_hash": active_manifest.get("sha256") if active_manifest else None,
+        "instruction_template_version": INSTRUCTION_TEMPLATE_VERSION,
+        "instruction_template_hash": INSTRUCTION_TEMPLATE_HASH,
+        "operation_description_hash": OPERATION_DESCRIPTION_HASH,
+        "relation_effect_hash": RELATION_EFFECT_HASH,
+        "ordered_sample_signature": compute_ordered_sample_signature(
+            train_samples,
+            val_samples,
+        ),
+        "converted_train_sha256": converted_rows_sha256(train_converted),
+        "converted_val_sha256": (
+            converted_rows_sha256(val_converted) if val_converted else None
+        ),
+        "token_length": token_report,
+        "upper_bound": mode == "full_oracle",
+        "shuffle_audit": shuffle_audit,
     }
     report_path.write_text(json.dumps(report_json, indent=2, ensure_ascii=False))
     print(f"  📊 转换报告: {report_path}")
