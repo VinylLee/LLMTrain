@@ -4,7 +4,7 @@
   "template": "gemma",
   "template_version": 1,
   "instruction_template_version": 2,
-  "cuda": "2",
+  "cuda": "0",
   "output_root": "output/experiments/gemma3_4b_mrinstr_pilot",
   "generation": {"do_sample": false, "max_new_tokens": 10},
   "stage2_gate": {

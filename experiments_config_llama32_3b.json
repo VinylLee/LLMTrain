@@ -3,7 +3,7 @@
   "requested_model": "meta-llama/Llama-3.2-3B-Instruct",
   "model_source_note": "Public BF16 non-quantized mirror used because the authenticated Hugging Face account lacks access to Meta's gated repository",
   "template": "llama3",
-  "cuda": "2",
+  "cuda": "0",
   "output_root": "output/experiments/llama32_3b_nli",
   "seed_scope": "sampling_only; conversion shuffle and LoRA trainer retain the existing default seed 42 for direct Gemma comparability",
   "experiments": [

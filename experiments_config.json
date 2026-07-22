@@ -1,7 +1,7 @@
 {
   "model": "google/gemma-3-4b-it",
   "template": "gemma",
-  "cuda": "2",
+  "cuda": "0",
   "experiments": [
     {
       "name": "mettrain_mnlim_4413_gemma3_4b",

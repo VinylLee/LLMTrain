@@ -123,7 +123,7 @@ use_cache: false
         yaml_path.write_text(yaml_content)
 
         run_cmd(
-            f"CUDA_VISIBLE_DEVICES=2 TORCH_COMPILE_DISABLE=1 "
+            f"CUDA_VISIBLE_DEVICES=0 TORCH_COMPILE_DISABLE=1 "
             f"python -m llamafactory.cli train {yaml_path}",
             f"🏋️ 微调 {args.name} ({mc['name']} + {args.dataset}, {task_label})",
         )
@@ -136,7 +136,7 @@ use_cache: false
     tests_orig_dir.mkdir(parents=True, exist_ok=True)
     print(f"\n📊 原始数据测试 → {tests_orig_dir}")
     run_cmd(
-        f"CUDA_VISIBLE_DEVICES=2 TORCH_COMPILE_DISABLE=1 python scripts/test_ft_model.py "
+        f"CUDA_VISIBLE_DEVICES=0 TORCH_COMPILE_DISABLE=1 python scripts/test_ft_model.py "
         f"--experiment {args.name} "
         f"--base-model {MODELS[args.model]['name']} "
         f"{'--model-task binary' if task_type == 'nli-binary' else ''} 2>&1",
@@ -147,7 +147,7 @@ use_cache: false
     tests_mr_dir.mkdir(parents=True, exist_ok=True)
     print(f"\n📊 MR 测试 → {tests_mr_dir}")
     run_cmd(
-        f"CUDA_VISIBLE_DEVICES=2 TORCH_COMPILE_DISABLE=1 python scripts/test_mettrain_experiment.py "
+        f"CUDA_VISIBLE_DEVICES=0 TORCH_COMPILE_DISABLE=1 python scripts/test_mettrain_experiment.py "
         f"--experiment {args.name} "
         f"--base-model {MODELS[args.model]['name']}",
         f"🧪 测试MR数据 ({task_label})",

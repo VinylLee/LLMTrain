@@ -498,7 +498,7 @@ def run_experiment(exp, config, output_root, progress_file, selected_steps,
     name = exp["name"]
     model_name = config["model"]
     template = config.get("template", "gemma")
-    cuda = config.get("cuda", "2")
+    cuda = config.get("cuda", "0")
     task_type = exp["task_type"]
     is_binary = task_type == "nli-binary"
     progress = load_progress(progress_file)

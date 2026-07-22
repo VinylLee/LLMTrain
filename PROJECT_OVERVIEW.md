@@ -315,7 +315,7 @@ MRV 在当前代码中按数据集/MR 的错误率统计，用于观察不同变
 
 - base model：`google/gemma-3-4b-it`；
 - template：`gemma`；
-- CUDA 配置值：`2`；
+- CUDA 配置值：`0`；
 - LoRA：rank 8、learning rate 3e-4、3 epochs、batch size 4、gradient accumulation 8；
 - 测试集：当前配置只列 mnlim、mnlimm、sick、snli，未列 RTE。
 
