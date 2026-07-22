@@ -1,40 +1,31 @@
 #!/usr/bin/env bash
 # Gemma-3-4B 下载与微调准备脚本
-# 使用: bash scripts/prepare_gemma.sh <your_hf_token>
+# 使用: bash scripts/prepare_gemma.sh
 
 set -e
 
-WORK_DIR="/home/ubuntu/LLMTrain/LLMTrain"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+WORK_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 cd "$WORK_DIR"
 
-TOKEN="$1"
-
-if [ -z "$TOKEN" ]; then
+if ! hf auth whoami >/dev/null 2>&1; then
     echo "================================================"
     echo "  📋 Gemma-3-4B 下载准备"
     echo "================================================"
     echo ""
     echo "  步骤 1: 访问 https://huggingface.co/google/gemma-3-4b-it"
     echo "  步骤 2: 点击 'Agree and access repository' 同意协议"
-    echo "  步骤 3: 访问 https://huggingface.co/settings/tokens"
-    echo "  步骤 4: 创建一个 token (或复制已有的)"
-    echo "  步骤 5: 运行: bash scripts/prepare_gemma.sh <你的token>"
+    echo "  步骤 3: 在当前环境运行: hf auth login"
+    echo "  步骤 4: 重新运行: bash scripts/prepare_gemma.sh"
     echo ""
     exit 1
 fi
-
-echo "✅ Token 已提供: ${TOKEN:0:8}..."
-echo ""
-
-# 登录HF
-echo "🔄 登录 HuggingFace..."
-huggingface-cli login --token "$TOKEN"
 
 # 下载模型
 echo ""
 echo "🔄 下载 Gemma-3-4B-it (约 8GB)..."
 echo "    可能需要几分钟..."
-huggingface-cli download google/gemma-3-4b-it --local-dir-use-symlinks False
+python scripts/cache_hf_model.py --model google/gemma-3-4b-it
 
 # 更新配置文件
 echo ""
@@ -77,5 +68,5 @@ echo "  配置: ft_config_gemma.yaml"
 echo ""
 echo "  启动训练:"
 echo "    conda activate llmtrain310"
-echo "    CUDA_VISIBLE_DEVICES=0 python -m llamafactory.cli train ft_config_gemma.yaml"
+echo "    python scripts/run_finetune.py --model gemma --cuda 0 --run"
 echo ""

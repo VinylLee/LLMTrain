@@ -13,8 +13,9 @@ from pathlib import Path
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from peft import PeftModel
 
-WORK_DIR = Path("/home/ubuntu/LLMTrain/LLMTrain")
-os.chdir(WORK_DIR)
+from project_runtime import PROJECT_ROOT, configure_console_encoding
+
+WORK_DIR = PROJECT_ROOT
 
 DATASETS = {
     "rte":    {"file": "data/nli/rte/test.json",     "task": "binary",  "labels": {0:"entailment", 1:"not_entailment"}},
@@ -118,6 +119,8 @@ def test_dataset(model, tokenizer, ds_name, ds_info, max_samples=500, model_task
     return total, correct, correct/total*100 if total else 0
 
 def main():
+    configure_console_encoding()
+    os.chdir(WORK_DIR)
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--base-model", default="google/gemma-3-4b-it")

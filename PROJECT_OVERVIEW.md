@@ -128,7 +128,7 @@ python scripts/run_batch_experiments.py \
 
 可用参数还包括 `--stratify`、`--model`、`--template`、`--cuda`、`--batch-size` 和 `--skip-summary`。
 
-注意：脚本把工作区写死为 `/home/ubuntu/LLMTrain/LLMTrain`，迁移仓库后必须修改；训练通过 `subprocess.run(..., shell=True)` 调用，配置文件应视为可信输入。
+脚本从自身位置推导项目根目录；训练和测试子进程通过参数列表及独立环境字典启动，可在 Windows 与 Linux 使用。
 
 #### `scripts/sample_mettrain_pairid.py`
 
@@ -382,7 +382,24 @@ accuracy = correct 为 true 的条目数 / 非空且可解析结果条目总数
 
 因此，重新建环境时不能只执行 `pip install -r requirements.txt` 就期待训练流程可运行。当前 Llama 实验指定使用 `llmtrain310`；CUDA 映射仍需在运行时确认。
 
-批量脚本明确设置 `HF_HUB_OFFLINE=1` 和 `TRANSFORMERS_OFFLINE=1`。Gemma 与 Llama 均须在启动前完成缓存；Llama 当前镜像 snapshot 为 `006f5dcd1393c3add266de40994ba96225e9689d`。
+项目通过 `scripts/project_runtime.py` 统一运行时设置：
+
+- 项目根目录从脚本文件位置推导，不依赖启动时的当前目录；
+- 子进程使用参数列表，不使用 Linux 专属的 shell 环境变量前缀；
+- `CUDA_VISIBLE_DEVICES`、`TORCH_COMPILE_DISABLE`、`HF_HUB_OFFLINE`、`TRANSFORMERS_OFFLINE` 通过子进程 `env` 传递；
+- Windows 子进程启用 UTF-8，并关闭不支持 symlink 时的重复警告；
+- 写入 cohort/report 的项目相对路径统一使用 `/`，保持 Windows/Linux 科学身份一致。
+
+批量脚本在实验阶段启用 `HF_HUB_OFFLINE=1` 和 `TRANSFORMERS_OFFLINE=1`，因此 Gemma 与 Llama 均须预先缓存。缓存并离线验证 Gemma：
+
+```text
+python scripts/cache_hf_model.py --model google/gemma-3-4b-it
+python scripts/cache_hf_model.py --model google/gemma-3-4b-it --verify-only
+```
+
+缓存脚本默认把模型写入 ignored 的 `models/google/gemma-3-4b-it/`。配置中的 `local_model_path` / `local_tokenizer_path` 存在时优先使用该目录，不存在时回退到原 Hugging Face 模型 ID，因此同一配置可在本机项目缓存和远程标准 Hub 缓存之间复用。
+
+Gemma 是 gated 仓库；首次下载前需接受模型协议，并在当前环境执行 `hf auth login`。不得把 token 写入项目配置或日志。Llama 当前镜像 snapshot 为 `006f5dcd1393c3add266de40994ba96225e9689d`。
 
 `.env` 含 API 凭证和端点，任何文档、日志或提交都不得泄露其内容。
 
@@ -394,7 +411,7 @@ accuracy = correct 为 true 的条目数 / 非空且可解析结果条目总数
 - `requirements.txt` 未覆盖训练依赖；
 - `.gitignore` 有“Secrets/Data/Output”标题，但当前可见内容没有对应的明确忽略规则，需要先决定哪些研究数据和结果应版本化；
 - `test_llm.py` 与 `test_deepseek.py` 重复度高；多个旧测试/微调入口与当前批量入口并存；
-- 多个脚本硬编码 `/home/ubuntu/LLMTrain/LLMTrain`，仓库不可直接迁移；
+- 项目入口已改为从脚本位置推导根目录，并使用跨平台子进程环境；
 - 批量脚本头部示例和注释仍写”8 个实验、5 个测试集”，实际配置是 9 个实验、4 个测试集；
 - 采样以完整 `pair_id` 组为单位，因此实际训练条数可超过配置 target；
 - `convert_nli_to_ft.py` 的 `--shuffle` 使用 `store_true` 且默认已经为 true，当前 CLI 无法关闭打乱；

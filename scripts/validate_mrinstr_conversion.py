@@ -16,6 +16,13 @@ from collections import Counter, defaultdict
 from datetime import datetime
 from pathlib import Path
 
+from project_runtime import (
+    PROJECT_ROOT,
+    apply_offline_mode,
+    configure_console_encoding,
+    resolve_model_reference,
+)
+
 from convert_nli_to_ft import (
     INSTRUCTION_NLI,
     INSTRUCTION_TEMPLATE_HASH,
@@ -38,7 +45,7 @@ from convert_nli_to_ft import (
 from run_batch_experiments import validate_cohort_artifacts
 
 
-WORK_DIR = Path("/home/ubuntu/LLMTrain/LLMTrain")
+WORK_DIR = PROJECT_ROOT
 REQUIRED_MODES = (
     "none",
     "operation_only",
@@ -203,8 +210,7 @@ def validate_by_mr_token_summaries(summaries, expected_counts, overall):
 
 
 def validate(args):
-    os.environ.setdefault("HF_HUB_OFFLINE", "1")
-    os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+    apply_offline_mode(True)
 
     config_path = resolve_path(args.config)
     config = load_json(config_path)
@@ -621,8 +627,21 @@ def validate(args):
         args.manual_samples_per_mr,
     )
     from transformers import AutoTokenizer
-    tokenizer_path = config.get("tokenizer", config.get("model"))
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, trust_remote_code=True)
+    tokenizer_path = resolve_model_reference(
+        config.get("tokenizer", config.get("model")),
+        config.get("local_tokenizer_path", config.get("local_model_path")),
+    )
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(
+            tokenizer_path,
+            trust_remote_code=True,
+            local_files_only=True,
+        )
+    except OSError as exc:
+        raise RuntimeError(
+            f"Tokenizer cache is unavailable for {tokenizer_path}. "
+            "Run scripts/cache_hf_model.py before Stage 2 validation."
+        ) from exc
     manual_path = output_dir / "stage2_manual_samples.md"
     manual_lines = [
         "# Stage 2 Manual Samples",
@@ -839,6 +858,7 @@ def parse_args():
 
 
 def main():
+    configure_console_encoding()
     report = validate(parse_args())
     if report["stage2_status"] != "PASS":
         sys.exit(1)

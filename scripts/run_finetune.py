@@ -14,8 +14,9 @@ LLaMA-Factory LoRA 微调启动脚本
 import json, subprocess, sys, os
 from pathlib import Path
 
-WORK_DIR = Path("/home/ubuntu/LLMTrain/LLMTrain")
-os.chdir(WORK_DIR)
+from project_runtime import PROJECT_ROOT, build_subprocess_env, configure_console_encoding
+
+WORK_DIR = PROJECT_ROOT
 
 # 预设模型配置
 MODELS = {
@@ -150,17 +151,23 @@ def show_config(model_key, custom_args, task_type="nli"):
     print()
     return yaml_path
 
-def run_training(yaml_path):
+def run_training(yaml_path, cuda="0"):
     print("=" * 65)
     print("  🚀 开始训练...")
     print("=" * 65)
     result = subprocess.run(
         [sys.executable, "-m", "llamafactory.cli", "train", str(yaml_path)],
-        cwd=WORK_DIR
+        cwd=WORK_DIR,
+        env=build_subprocess_env(
+            cuda=cuda,
+            offline=True,
+            torch_compile_disable=True,
+        ),
     )
     return result.returncode
 
 if __name__ == "__main__":
+    configure_console_encoding()
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", default="qwen", choices=list(MODELS.keys()),
@@ -179,6 +186,7 @@ if __name__ == "__main__":
                         help="输出目录")
     parser.add_argument("--run", action="store_true",
                         help="直接开始训练（不预览）")
+    parser.add_argument("--cuda", default="0", help="CUDA 设备号")
     parser.add_argument("--task-type", default=None, choices=["nli", "nli-binary"],
                         help="任务类型: nli(三分类) 或 nli-binary(RTE二分类)。默认从数据集名自动检测")
     args = parser.parse_args()
@@ -199,7 +207,7 @@ if __name__ == "__main__":
     yaml_path = show_config(args.model, custom, task_type)
 
     if args.run:
-        sys.exit(run_training(yaml_path))
+        sys.exit(run_training(yaml_path, args.cuda))
     else:
         print("  💡 加 --run 参数直接启动训练")
         print()

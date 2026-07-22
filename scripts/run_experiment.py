@@ -16,19 +16,28 @@
 import subprocess, sys, os, json, argparse
 from pathlib import Path
 
-WORK_DIR = Path("/home/ubuntu/LLMTrain/LLMTrain")
-os.chdir(WORK_DIR)
+from project_runtime import PROJECT_ROOT, build_subprocess_env, configure_console_encoding
+
+WORK_DIR = PROJECT_ROOT
 
 MODELS = {
     "gemma": {"name": "google/gemma-3-4b-it", "template": "gemma"},
     "qwen":  {"name": "Qwen/Qwen2.5-7B-Instruct", "template": "qwen"},
 }
 
-def run_cmd(cmd, desc):
+def run_cmd(cmd, desc, cuda="0"):
     print(f"\n{'='*60}")
     print(f"  {desc}")
     print(f"{'='*60}\n")
-    result = subprocess.run(cmd, shell=True, cwd=WORK_DIR)
+    result = subprocess.run(
+        [str(part) for part in cmd],
+        cwd=WORK_DIR,
+        env=build_subprocess_env(
+            cuda=cuda,
+            offline=True,
+            torch_compile_disable=True,
+        ),
+    )
     if result.returncode != 0:
         print(f"  ❌ {desc} 失败 (code={result.returncode})")
         sys.exit(1)
@@ -41,6 +50,7 @@ def detect_binary_from_dataset(dataset_name):
 
 
 def main():
+    configure_console_encoding()
     parser = argparse.ArgumentParser(description="统一实验入口")
     parser.add_argument("--name", required=True, help="实验名 (例如 my_experiment)")
     parser.add_argument("--model", default="gemma", choices=list(MODELS.keys()))
@@ -48,6 +58,7 @@ def main():
     parser.add_argument("--lr", type=float, default=3e-4, help="学习率")
     parser.add_argument("--epochs", type=float, default=3.0, help="训练轮数")
     parser.add_argument("--rank", type=int, default=8, help="LoRA rank")
+    parser.add_argument("--cuda", default="0", help="CUDA 设备号")
     parser.add_argument("--test-only", action="store_true", help="仅测试已有模型（跳过微调）")
     parser.add_argument("--skip-test", action="store_true", help="仅微调，跳过测试")
     parser.add_argument("--task-type", default=None, choices=["nli", "nli-binary"],
@@ -123,9 +134,9 @@ use_cache: false
         yaml_path.write_text(yaml_content)
 
         run_cmd(
-            f"CUDA_VISIBLE_DEVICES=0 TORCH_COMPILE_DISABLE=1 "
-            f"python -m llamafactory.cli train {yaml_path}",
+            [sys.executable, "-m", "llamafactory.cli", "train", yaml_path],
             f"🏋️ 微调 {args.name} ({mc['name']} + {args.dataset}, {task_label})",
+            args.cuda,
         )
         yaml_path.unlink(missing_ok=True)
 
@@ -136,21 +147,29 @@ use_cache: false
     tests_orig_dir.mkdir(parents=True, exist_ok=True)
     print(f"\n📊 原始数据测试 → {tests_orig_dir}")
     run_cmd(
-        f"CUDA_VISIBLE_DEVICES=0 TORCH_COMPILE_DISABLE=1 python scripts/test_ft_model.py "
-        f"--experiment {args.name} "
-        f"--base-model {MODELS[args.model]['name']} "
-        f"{'--model-task binary' if task_type == 'nli-binary' else ''} 2>&1",
+        [
+            sys.executable,
+            WORK_DIR / "scripts" / "test_ft_model.py",
+            "--experiment", args.name,
+            "--base-model", MODELS[args.model]["name"],
+            *(["--model-task", "binary"] if task_type == "nli-binary" else []),
+        ],
         f"🧪 测试原始数据 ({task_label})",
+        args.cuda,
     )
 
     # 测试 MR 数据（通过 test_mettrain_experiment.py）
     tests_mr_dir.mkdir(parents=True, exist_ok=True)
     print(f"\n📊 MR 测试 → {tests_mr_dir}")
     run_cmd(
-        f"CUDA_VISIBLE_DEVICES=0 TORCH_COMPILE_DISABLE=1 python scripts/test_mettrain_experiment.py "
-        f"--experiment {args.name} "
-        f"--base-model {MODELS[args.model]['name']}",
+        [
+            sys.executable,
+            WORK_DIR / "scripts" / "test_mettrain_experiment.py",
+            "--experiment", args.name,
+            "--base-model", MODELS[args.model]["name"],
+        ],
         f"🧪 测试MR数据 ({task_label})",
+        args.cuda,
     )
 
     # 生成测试结果摘要

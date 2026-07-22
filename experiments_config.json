@@ -1,5 +1,7 @@
 {
   "model": "google/gemma-3-4b-it",
+  "local_model_path": "models/google/gemma-3-4b-it",
+  "local_tokenizer_path": "models/google/gemma-3-4b-it",
   "template": "gemma",
   "cuda": "0",
   "experiments": [

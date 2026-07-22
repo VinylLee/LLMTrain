@@ -38,6 +38,8 @@ import argparse
 import random
 import hashlib
 from pathlib import Path
+
+from project_runtime import PROJECT_ROOT
 from collections import Counter, defaultdict
 
 
@@ -53,7 +55,7 @@ def serialize_counter_keys(counter):
             result[k] = v
     return result
 
-WORK_DIR = Path("/home/ubuntu/LLMTrain/LLMTrain")
+WORK_DIR = PROJECT_ROOT
 
 # ============================================================
 # 标签映射

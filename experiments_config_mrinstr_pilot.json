@@ -1,6 +1,8 @@
 {
   "model": "google/gemma-3-4b-it",
   "tokenizer": "google/gemma-3-4b-it",
+  "local_model_path": "models/google/gemma-3-4b-it",
+  "local_tokenizer_path": "models/google/gemma-3-4b-it",
   "template": "gemma",
   "template_version": 1,
   "instruction_template_version": 2,

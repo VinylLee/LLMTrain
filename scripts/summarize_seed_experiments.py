@@ -7,8 +7,10 @@ import statistics
 import sys
 from pathlib import Path
 
+from project_runtime import PROJECT_ROOT
 
-WORK_DIR = Path("/home/ubuntu/LLMTrain/LLMTrain")
+
+WORK_DIR = PROJECT_ROOT
 
 
 def resolve_path(value):

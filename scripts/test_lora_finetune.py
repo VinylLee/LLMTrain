@@ -5,8 +5,10 @@ LLaMA-Factory LoRA 微调测试脚本
 import json, os, sys, subprocess
 from pathlib import Path
 
-WORK_DIR = Path("/home/ubuntu/LLMTrain/LLMTrain")
-os.chdir(WORK_DIR)
+from project_runtime import PROJECT_ROOT, build_subprocess_env, configure_console_encoding
+
+WORK_DIR = PROJECT_ROOT
+configure_console_encoding()
 
 print("=" * 60)
 print("Step 1: 创建测试数据集")
@@ -80,7 +82,15 @@ print("=" * 60)
 
 result = subprocess.run(
     [sys.executable, "-m", "llamafactory.cli", "train", str(yaml_path)],
-    capture_output=True, text=True, timeout=600, cwd=WORK_DIR
+    capture_output=True,
+    text=True,
+    timeout=600,
+    cwd=WORK_DIR,
+    env=build_subprocess_env(
+        cuda="0",
+        offline=False,
+        torch_compile_disable=True,
+    ),
 )
 
 # 打印最后的关键输出

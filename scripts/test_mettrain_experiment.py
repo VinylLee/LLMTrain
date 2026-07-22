@@ -8,6 +8,8 @@
 __test__ = False
 import json, os, sys, time, torch, logging
 from pathlib import Path
+
+from project_runtime import PROJECT_ROOT, configure_console_encoding
 from collections import Counter
 from transformers import AutoModelForCausalLM, AutoTokenizer, logging as hf_logging
 from peft import PeftModel
@@ -18,8 +20,7 @@ os.environ["TRANSFORMERS_VERBOSITY"] = "error"
 hf_logging.set_verbosity_error()
 logging.getLogger("transformers").setLevel(logging.ERROR)
 
-WORK_DIR = Path("/home/ubuntu/LLMTrain/LLMTrain")
-os.chdir(WORK_DIR)
+WORK_DIR = PROJECT_ROOT
 
 # 原始数据集配置
 ORIGINAL_DATASETS = {
@@ -280,6 +281,8 @@ def collect_mr_samples(mr_dir):
 
 
 def main():
+    configure_console_encoding()
+    os.chdir(WORK_DIR)
     import argparse
     parser = argparse.ArgumentParser(description="测试微调实验模型")
     parser.add_argument("--experiment", required=True, help="实验名")

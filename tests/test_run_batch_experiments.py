@@ -30,6 +30,30 @@ def test_pilot_yaml_has_eval_and_seeds(tmp_path):
     assert "seed: 42" in text and "data_seed: 42" in text
 
 
+def test_run_cmd_passes_argv_and_environment_without_shell(tmp_path, monkeypatch):
+    captured = {}
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = cmd
+        captured["kwargs"] = kwargs
+        return type("Result", (), {"returncode": 0})()
+
+    monkeypatch.setattr(runner.subprocess, "run", fake_run)
+    env = {"CUDA_VISIBLE_DEVICES": "0"}
+    assert runner.run_cmd(["python", "script.py", "value with spaces"],
+                          "cross-platform", cwd=tmp_path, env=env)
+    assert captured["cmd"] == ["python", "script.py", "value with spaces"]
+    assert captured["kwargs"]["cwd"] == tmp_path
+    assert captured["kwargs"]["env"] == env
+    assert "shell" not in captured["kwargs"]
+
+
+def test_workspace_relative_uses_portable_posix_separators(tmp_path, monkeypatch):
+    monkeypatch.setattr(runner, "WORK_DIR", tmp_path)
+    path = tmp_path / "data" / "ft_datasets" / "sampled.json"
+    assert runner.workspace_relative(path) == "data/ft_datasets/sampled.json"
+
+
 def test_run_signature_is_deterministic_and_sensitive():
     config = {"model": "model", "template": "gemma", "generation": {"do_sample": False}}
     first = build_run_signature(experiment(), config, "abc", "data", "manifest", {"test": "hash"})

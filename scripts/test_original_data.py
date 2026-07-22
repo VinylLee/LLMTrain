@@ -4,15 +4,16 @@
 逐个加载 LM Studio 中的模型，在5个数据集的原始测试集上跑推理
 完成后自动切换下一个模型
 """
-import json, os, sys, time, requests, subprocess
+import json, os, sys, time, requests, shutil, subprocess
 from datetime import datetime
 from pathlib import Path
 
-WORK_DIR = Path("/home/ubuntu/LLMTrain/LLMTrain")
-os.chdir(WORK_DIR)
+from project_runtime import PROJECT_ROOT, configure_console_encoding
+
+WORK_DIR = PROJECT_ROOT
 
 API_URL = "http://localhost:1234/v1/chat/completions"
-LMS = "/home/ubuntu/.lmstudio/bin/lms"
+LMS = os.environ.get("LMS_CLI") or shutil.which("lms") or "lms"
 DELAY = 0.5
 MAX_RETRIES = 3
 
@@ -193,6 +194,8 @@ def process_dataset(ds_name, ds_info, model):
     return total, processed, errors
 
 def run_all():
+    configure_console_encoding()
+    os.chdir(WORK_DIR)
     log("=" * 60)
     log("🏁 全模型 × 5数据集 原始测试启动")
     log(f"模型列表: {ALL_MODELS}")

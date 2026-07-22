@@ -50,12 +50,20 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from datetime import datetime
 
+from project_runtime import (
+    PROJECT_ROOT,
+    apply_offline_mode,
+    build_subprocess_env,
+    configure_console_encoding,
+    resolve_model_reference,
+)
+
 from sample_mettrain_pairid import (
     build_sampling_report,
     compute_data_signature as compute_sampling_data_signature,
 )
 
-WORK_DIR = Path("/home/ubuntu/LLMTrain/LLMTrain")
+WORK_DIR = PROJECT_ROOT
 DEFAULT_OUTPUT_ROOT = WORK_DIR / "output" / "experiments"
 
 # 步骤名称
@@ -94,7 +102,7 @@ def load_jsonl_strict(path):
 
 
 def workspace_relative(path):
-    return str(Path(path).resolve().relative_to(WORK_DIR.resolve()))
+    return Path(path).resolve().relative_to(WORK_DIR.resolve()).as_posix()
 
 
 def pair_key(value):
@@ -409,13 +417,14 @@ def mark_step(progress_file, progress, exp_name, step, status):
     save_progress(progress_file, progress)
 
 
-def run_cmd(cmd, desc, dry_run=False, cwd=None):
+def run_cmd(cmd, desc, dry_run=False, cwd=None, env=None):
     """运行命令或打印（dry-run模式）"""
+    cmd = [str(part) for part in cmd]
     print(f"\n  ▶ {'[DRY-RUN]' if dry_run else 'RUN'} {desc}")
-    print(f"    {cmd}")
+    print(f"    {subprocess.list2cmdline(cmd)}")
     if dry_run:
         return True
-    result = subprocess.run(cmd, shell=True, cwd=cwd or WORK_DIR)
+    result = subprocess.run(cmd, cwd=cwd or WORK_DIR, env=env)
     if result.returncode != 0:
         print(f"    ❌ {desc} 失败 (code={result.returncode})")
         return False
@@ -496,9 +505,20 @@ def run_experiment(exp, config, output_root, progress_file, selected_steps,
                    initialize_cohort_metadata=False):
     """运行单个实验的完整流水线"""
     name = exp["name"]
-    model_name = config["model"]
+    model_name = resolve_model_reference(
+        config["model"], config.get("local_model_path")
+    )
+    tokenizer_name = resolve_model_reference(
+        config.get("tokenizer", config["model"]),
+        config.get("local_tokenizer_path", config.get("local_model_path")),
+    )
     template = config.get("template", "gemma")
     cuda = config.get("cuda", "0")
+    runtime_env = build_subprocess_env(
+        cuda=cuda,
+        offline=True,
+        torch_compile_disable=True,
+    )
     task_type = exp["task_type"]
     is_binary = task_type == "nli-binary"
     progress = load_progress(progress_file)
@@ -508,8 +528,8 @@ def run_experiment(exp, config, output_root, progress_file, selected_steps,
     # 测试集范围由 config 的 test_sets 决定（统一 original+mr 的数据集键）
     ts = config.get("test_sets", {})
     test_ds = sorted(set(ts.get("original", {}).keys()) | set(ts.get("mr", {}).keys()))
-    datasets_flag = f"--datasets {','.join(test_ds)}" if test_ds else ""
-    batch_flag = f"--batch-size {config.get('batch_size', 32)}"
+    dataset_args = ["--datasets", ",".join(test_ds)] if test_ds else []
+    batch_args = ["--batch-size", str(config.get("batch_size", 32))]
 
     print(f"\n{'='*70}")
     print(f"  📦 实验: {name}")
@@ -576,17 +596,22 @@ def run_experiment(exp, config, output_root, progress_file, selected_steps,
     elif resume and step_completed(progress, name, "sample"):
         print(f"    ⏩ 跳过（已完成）")
     else:
-        stratify_flag = "--stratify" if exp.get("stratify") else ""
+        sample_cmd = [
+            sys.executable,
+            WORK_DIR / "scripts" / "sample_mettrain_pairid.py",
+            "--input", exp["train_data"],
+            "--target", exp["target"],
+            "--seed", exp.get("seed", 42),
+            "--output", sampled_path,
+            "--report-output", cohort_dir / "sampling_report.json",
+        ]
+        if exp.get("stratify"):
+            sample_cmd.append("--stratify")
         ok = run_cmd(
-            f"python scripts/sample_mettrain_pairid.py "
-            f"--input {exp['train_data']} "
-            f"--target {exp['target']} "
-            f"--seed {exp.get('seed', 42)} "
-            f"{stratify_flag} "
-            f"--output {sampled_path} "
-            f"--report-output {cohort_dir / 'sampling_report.json'}",
+            sample_cmd,
             f"采样 {name} (target={exp['target']})",
             dry_run,
+            env=runtime_env,
         )
         if not dry_run:
             mark_step(progress_file, progress, name, "sample", "completed" if ok else "failed")
@@ -606,52 +631,51 @@ def run_experiment(exp, config, output_root, progress_file, selected_steps,
     elif resume and step_completed(progress, name, "convert"):
         print(f"    ⏩ 跳过（已完成）")
     else:
-        # MR-instruction mode
         mr_mode = exp.get("mr_instruction_mode", "none")
-        mr_mode_flag = f"--mr-instruction-mode {mr_mode}"
-        instruction_template_flag = (
-            "--instruction-template-version "
-            f"{config.get('instruction_template_version', 2)}"
-        )
-
-        # Strict pairing
-        strict_flag = "--strict-pairing" if exp.get("strict_pairing", False) else ""
 
         # Cohort-based split manifest sharing
         cohort_id = exp.get("cohort_id")
-        manifest_flag = ""
+        manifest_args = []
         if cohort_id:
             # Manifest 放在 cohort 的 ft_datasets 目录下（以 cohort 中第一个实验名作为基础路径）
             cohort_key = (cohort_id, exp.get("seed", 42))
             manifest_path = cohort_dir / "split_manifest.json"
 
             if manifest_path.exists():
-                manifest_flag = f"--split-manifest {manifest_path}"
+                manifest_args = ["--split-manifest", str(manifest_path)]
             elif cohort_key not in _cohort_manifest_written:
                 # 第一个变体：写入 manifest
-                manifest_flag = f"--write-split-manifest {manifest_path}"
+                manifest_args = ["--write-split-manifest", str(manifest_path)]
                 _cohort_manifest_written.add(cohort_key)
             else:
                 # 后续变体：复用 manifest
-                manifest_flag = f"--split-manifest {manifest_path}"
+                manifest_args = ["--split-manifest", str(manifest_path)]
 
-        binary_flag = "--binary" if is_binary else ""
+        convert_cmd = [
+            sys.executable,
+            WORK_DIR / "scripts" / "convert_nli_to_ft.py",
+            "--input", sampled_path,
+            "--name", name,
+            "--split",
+            "--val-ratio", exp.get("val_ratio", 0.05),
+            "--seed", exp.get("seed", 42),
+            "--report-token-lengths",
+            "--tokenizer-path", tokenizer_name,
+            "--cutoff-len", exp.get("cutoff_len", 512),
+            "--mr-instruction-mode", mr_mode,
+            "--instruction-template-version",
+            config.get("instruction_template_version", 2),
+        ]
+        if is_binary:
+            convert_cmd.append("--binary")
+        if exp.get("strict_pairing", False):
+            convert_cmd.append("--strict-pairing")
+        convert_cmd.extend(manifest_args)
         ok = run_cmd(
-            f"python scripts/convert_nli_to_ft.py "
-            f"--input {sampled_path} "
-            f"--name {name} "
-            f"--split "
-            f"--val-ratio {exp.get('val_ratio', 0.05)} "
-            f"--seed {exp.get('seed', 42)} "
-            f"--report-token-lengths --tokenizer-path {config.get('tokenizer', model_name)} "
-            f"--cutoff-len {exp.get('cutoff_len', 512)} "
-            f"{binary_flag} "
-            f"{mr_mode_flag} "
-            f"{instruction_template_flag} "
-            f"{strict_flag} "
-            f"{manifest_flag}",
+            convert_cmd,
             f"转换 {name} (mode={mr_mode})",
             dry_run,
+            env=runtime_env,
         )
         if not dry_run:
             mark_step(progress_file, progress, name, "convert", "completed" if ok else "failed")
@@ -705,10 +729,10 @@ def run_experiment(exp, config, output_root, progress_file, selected_steps,
             yaml_path.write_text(yaml_content)
 
         ok = run_cmd(
-            f"CUDA_VISIBLE_DEVICES={cuda} TORCH_COMPILE_DISABLE=1 "
-            f"python -m llamafactory.cli train {yaml_path}",
+            [sys.executable, "-m", "llamafactory.cli", "train", yaml_path],
             f"微调 {name}",
             dry_run,
+            env=runtime_env,
         )
         if not dry_run:
             yaml_path.unlink(missing_ok=True)
@@ -726,21 +750,24 @@ def run_experiment(exp, config, output_root, progress_file, selected_steps,
     elif resume and step_completed(progress, name, "test_original"):
         print(f"    ⏩ 跳过（已完成）")
     else:
-        model_task_val = "binary" if task_type == "nli-binary" else "3class"
-        model_task_flag = f"--model-task {model_task_val}" if is_binary else ""
+        test_cmd = [
+            sys.executable,
+            WORK_DIR / "scripts" / "test_mettrain_experiment.py",
+            "--experiment", name,
+            "--base-model", model_name,
+            "--lora", model_dir,
+            "--output-root", output_root,
+            *dataset_args,
+            *batch_args,
+            "--skip-mr",
+        ]
+        if is_binary:
+            test_cmd.extend(["--model-task", "binary"])
         ok = run_cmd(
-            f"CUDA_VISIBLE_DEVICES={cuda} TORCH_COMPILE_DISABLE=1 "
-            f"python scripts/test_mettrain_experiment.py "
-            f"--experiment {name} "
-            f"--base-model {model_name} "
-            f"--lora {model_dir} "
-            f"--output-root {output_root} "
-            f"{model_task_flag} "
-            f"{datasets_flag} "
-            f"{batch_flag} "
-            f"--skip-mr",
+            test_cmd,
             f"测试原始数据 {name}",
             dry_run,
+            env=runtime_env,
         )
         if not dry_run:
             mark_step(progress_file, progress, name, "test_original", "completed" if ok else "failed")
@@ -756,21 +783,24 @@ def run_experiment(exp, config, output_root, progress_file, selected_steps,
     elif resume and step_completed(progress, name, "test_mr"):
         print(f"    ⏩ 跳过（已完成）")
     else:
-        model_task_val = "binary" if task_type == "nli-binary" else "3class"
-        model_task_flag = f"--model-task {model_task_val}" if is_binary else ""
+        test_cmd = [
+            sys.executable,
+            WORK_DIR / "scripts" / "test_mettrain_experiment.py",
+            "--experiment", name,
+            "--base-model", model_name,
+            "--lora", model_dir,
+            "--output-root", output_root,
+            *dataset_args,
+            *batch_args,
+            "--skip-original",
+        ]
+        if is_binary:
+            test_cmd.extend(["--model-task", "binary"])
         ok = run_cmd(
-            f"CUDA_VISIBLE_DEVICES={cuda} TORCH_COMPILE_DISABLE=1 "
-            f"python scripts/test_mettrain_experiment.py "
-            f"--experiment {name} "
-            f"--base-model {model_name} "
-            f"--lora {model_dir} "
-            f"--output-root {output_root} "
-            f"{model_task_flag} "
-            f"{datasets_flag} "
-            f"{batch_flag} "
-            f"--skip-original",
+            test_cmd,
             f"测试MR数据 {name}",
             dry_run,
+            env=runtime_env,
         )
         if not dry_run:
             mark_step(progress_file, progress, name, "test_mr", "completed" if ok else "failed")
@@ -1010,6 +1040,7 @@ def aggregate_results(seeds, config, output_root, result_file, expected_names):
 
 
 def main():
+    configure_console_encoding()
     parser = argparse.ArgumentParser(
         description="批量实验编排器：采样 → 转换 → 微调 → 测试"
     )
@@ -1101,17 +1132,16 @@ def main():
     )
     args = parser.parse_args()
 
-    config_path = Path(args.config)
+    config_path = resolve_workspace_path(args.config)
     if not config_path.exists():
         print(f"❌ 配置文件不存在: {config_path}")
         sys.exit(1)
 
-    config = load_config(args.config)
+    config = load_config(config_path)
 
     # 模型已缓存在本地 HF hub，且当前环境无法访问 huggingface.co（SSL EOF）。
     # 强制离线模式，避免 finetune/test 子进程因联网校验 tokenizer 而失败。
-    os.environ["HF_HUB_OFFLINE"] = "1"
-    os.environ["TRANSFORMERS_OFFLINE"] = "1"
+    apply_offline_mode(True)
 
     # CLI 覆盖配置
     if args.model:
