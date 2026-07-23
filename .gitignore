@@ -25,6 +25,8 @@ output/
 /artifacts/
 /data/ft_datasets/_cohorts/
 /models/
+backup_output/
+/backup_output/
 
 # --- Test cache ---
 .pytest_cache/
