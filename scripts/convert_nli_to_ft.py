@@ -1155,7 +1155,7 @@ def load_jsonl(filepath):
 
 def save_jsonl(samples, filepath):
     """保存为 JSONL 文件"""
-    with open(filepath, "w", encoding="utf-8") as f:
+    with open(filepath, "w", encoding="utf-8", newline="\n") as f:
         for s in samples:
             f.write(json.dumps(s, ensure_ascii=False) + "\n")
     print(f"  💾 保存 {len(samples)} 条 → {filepath}")
@@ -1164,17 +1164,29 @@ def save_jsonl(samples, filepath):
 def register_dataset(dataset_name, train_file, val_file=None, task_type="nli"):
     """注册数据集到 dataset_info.json"""
     info_path = WORK_DIR / "data" / "dataset_info.json"
+    data_root = (WORK_DIR / "data").resolve()
+
+    def registry_file_name(path_value):
+        path = Path(path_value)
+        if not path.is_absolute():
+            path = WORK_DIR / path
+        try:
+            return path.resolve().relative_to(data_root).as_posix()
+        except ValueError as exc:
+            raise ValueError(
+                f"注册文件必须位于项目 data/ 目录内: {path.resolve()}"
+            ) from exc
 
     if info_path.exists():
         try:
-            info = json.loads(info_path.read_text())
+            info = json.loads(info_path.read_text(encoding="utf-8"))
         except Exception:
             info = {}
     else:
         info = {}
 
     entry = {
-        "file_name": str(train_file),
+        "file_name": registry_file_name(train_file),
         "formatting": "alpaca",
         "columns": {
             "prompt": "instruction",
@@ -1188,7 +1200,7 @@ def register_dataset(dataset_name, train_file, val_file=None, task_type="nli"):
 
     if val_file:
         val_entry = {
-            "file_name": str(val_file),
+            "file_name": registry_file_name(val_file),
             "formatting": "alpaca",
             "columns": {
                 "prompt": "instruction",
@@ -1200,7 +1212,10 @@ def register_dataset(dataset_name, train_file, val_file=None, task_type="nli"):
             val_entry["task_type"] = task_type
         info[dataset_name + "_val"] = val_entry
 
-    info_path.write_text(json.dumps(info, indent=2, ensure_ascii=False))
+    info_path.write_text(
+        json.dumps(info, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
     print(f"  📝 已注册数据集 '{dataset_name}' → {info_path}")
 
 

@@ -13,7 +13,7 @@ from project_runtime import PROJECT_ROOT, configure_console_encoding
 from collections import Counter
 from transformers import AutoModelForCausalLM, AutoTokenizer, logging as hf_logging
 from peft import PeftModel
-from inference_utils import decode_generated_continuations
+from inference_utils import decode_generated_continuations, unpack_generation_inputs
 
 # 抑制烦人的生成参数警告
 os.environ["TRANSFORMERS_VERBOSITY"] = "error"
@@ -64,10 +64,14 @@ def load_model(base_model_name, lora_path):
 def call_model(model, tokenizer, prompt, max_tokens=10):
     messages = [{"role": "user", "content": prompt}]
     inputs = tokenizer.apply_chat_template(messages, add_generation_prompt=True, return_tensors="pt").to(model.device)
+    model_inputs, input_length = unpack_generation_inputs(inputs)
     with torch.no_grad():
-        outputs = model.generate(inputs, max_new_tokens=max_tokens, do_sample=False)
-    response = tokenizer.decode(outputs[0][inputs.shape[1]:], skip_special_tokens=True).strip().lower().rstrip(".!?,")
-    return response
+        outputs = model.generate(
+            **model_inputs,
+            max_new_tokens=max_tokens,
+            do_sample=False,
+        )
+    return decode_generated_continuations(outputs, input_length, tokenizer)[0]
 
 
 def call_model_batch(model, tokenizer, prompts, max_tokens=10):
@@ -141,7 +145,7 @@ def normalize_prediction(pred, task, labels):
 def load_jsonl_samples(filepath):
     """加载 JSONL 文件"""
     samples = []
-    with open(filepath) as f:
+    with open(filepath, encoding="utf-8") as f:
         for line in f:
             line = line.strip()
             if not line:
@@ -252,7 +256,7 @@ def test_dataset(model, tokenizer, samples, ds_name, dataset_task, labels,
 
     # 保存
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, "w") as f:
+    with open(output_path, "w", encoding="utf-8", newline="\n") as f:
         for r in results:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
 

@@ -17,6 +17,7 @@ import pytest
 # 将被测试模块加入 sys.path
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+import convert_nli_to_ft as converter
 
 from convert_nli_to_ft import (
     normalize_mr_id,
@@ -39,6 +40,7 @@ from convert_nli_to_ft import (
     validate_manifest_for_groups,
     summarize_token_lengths,
     build_token_length_report,
+    save_jsonl,
     INSTRUCTION_TEMPLATE_VERSION,
     INSTRUCTION_TEMPLATE_HASH,
     OPERATION_DESCRIPTION_HASH,
@@ -47,7 +49,43 @@ from convert_nli_to_ft import (
     MR_RELATION_EFFECTS,
     KNOWN_MR_IDS,
     LABEL_NAMES_3CLASS,
+    register_dataset,
 )
+
+
+def test_dataset_registration_uses_data_relative_posix_paths(tmp_path, monkeypatch):
+    monkeypatch.setattr(converter, "WORK_DIR", tmp_path)
+    train_path = tmp_path / "data" / "ft_datasets" / "pilot" / "train.json"
+    val_path = tmp_path / "data" / "ft_datasets" / "pilot" / "val.json"
+    train_path.parent.mkdir(parents=True)
+    train_path.write_text("{}\n", encoding="utf-8")
+    val_path.write_text("{}\n", encoding="utf-8")
+
+    register_dataset("pilot", train_path, val_path)
+
+    registry = json.loads(
+        (tmp_path / "data" / "dataset_info.json").read_text(encoding="utf-8")
+    )
+    assert registry["pilot"]["file_name"] == "ft_datasets/pilot/train.json"
+    assert registry["pilot_val"]["file_name"] == "ft_datasets/pilot/val.json"
+
+
+def test_dataset_registration_rejects_files_outside_data(tmp_path, monkeypatch):
+    monkeypatch.setattr(converter, "WORK_DIR", tmp_path)
+    outside = tmp_path / "outside.json"
+    outside.write_text("{}\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="data/"):
+        register_dataset("bad", outside)
+
+
+def test_save_jsonl_bytes_match_portable_converted_hash(tmp_path):
+    rows = [{"instruction": "i", "input": "x", "output": "neutral"}]
+    path = tmp_path / "rows.jsonl"
+    save_jsonl(rows, path)
+    payload = path.read_bytes()
+    assert b"\r\n" not in payload
+    import hashlib
+    assert hashlib.sha256(payload).hexdigest() == converted_rows_sha256(rows)
 
 
 def test_data_signature_is_order_independent_and_content_sensitive():

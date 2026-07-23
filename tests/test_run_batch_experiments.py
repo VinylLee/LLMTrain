@@ -25,9 +25,18 @@ def experiment(mode="none", seed=42):
 
 def test_pilot_yaml_has_eval_and_seeds(tmp_path):
     text = build_yaml(experiment(), "model", "gemma", tmp_path)
+    assert f"dataset_dir: {(runner.WORK_DIR / 'data').as_posix()}" in text
     assert "eval_dataset: pilot_seed42_val" in text
     assert "eval_strategy: steps" in text
     assert "seed: 42" in text and "data_seed: 42" in text
+
+
+def test_exploratory_yaml_uses_max_steps_instead_of_full_epochs(tmp_path):
+    exp = experiment()
+    exp["ft_params"]["max_steps"] = 20
+    text = build_yaml(exp, "model", "gemma", tmp_path)
+    assert "max_steps: 20" in text
+    assert "num_train_epochs:" not in text
 
 
 def test_run_cmd_passes_argv_and_environment_without_shell(tmp_path, monkeypatch):
@@ -54,6 +63,15 @@ def test_workspace_relative_uses_portable_posix_separators(tmp_path, monkeypatch
     assert runner.workspace_relative(path) == "data/ft_datasets/sampled.json"
 
 
+def test_load_config_uses_utf8_on_windows(tmp_path):
+    config_path = tmp_path / "config.json"
+    config_path.write_text(
+        json.dumps({"label": "EXPLORATORY — 人工验证未通过"}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    assert runner.load_config(config_path)["label"] == "EXPLORATORY — 人工验证未通过"
+
+
 def test_run_signature_is_deterministic_and_sensitive():
     config = {"model": "model", "template": "gemma", "generation": {"do_sample": False}}
     first = build_run_signature(experiment(), config, "abc", "data", "manifest", {"test": "hash"})
@@ -61,6 +79,11 @@ def test_run_signature_is_deterministic_and_sensitive():
     assert first == second
     changed = build_run_signature(experiment("pair_only"), config, "abc", "data", "manifest", {"test": "hash"})
     assert changed["run_signature"] != first["run_signature"]
+    gated = build_run_signature(
+        experiment(), config, "abc", "data", "manifest", {"test": "hash"},
+        {"sha256": "gate-decision"},
+    )
+    assert gated["run_signature"] != first["run_signature"]
 
 
 def test_run_signature_covers_all_seed_roles():
@@ -170,9 +193,199 @@ def test_stage2_gate_requires_pass_open_and_matching_hashes(tmp_path, monkeypatc
         "instruction_template_version": 2,
         "stage2_gate": {"required": True, "report": "stage2.json"},
     }
-    assert enforce_stage2_training_gate(config, exp, conversion) == report
+    decision = enforce_stage2_training_gate(config, exp, conversion)
+    assert decision["decision"] == "STAGE2_PASS"
+    assert decision["stage2_report"]["stage2_status"] == "PASS"
+    assert decision["stage2_report"]["training_gate"] == "OPEN"
+    assert decision["sha256"]
 
     report["training_gate"] = "BLOCKED"
     report_path.write_text(json.dumps(report), encoding="utf-8")
     with pytest.raises(RuntimeError, match="Stage 2 training gate blocked"):
         enforce_stage2_training_gate(config, exp, conversion)
+
+
+def test_stage2_gate_allows_narrow_audited_exploratory_override(tmp_path, monkeypatch):
+    monkeypatch.setattr(runner, "WORK_DIR", tmp_path)
+    conversion = {
+        "data_signature": "data",
+        "manifest_hash": "manifest",
+        "ordered_sample_signature": "order",
+        "converted_train_sha256": "train",
+        "converted_val_sha256": "val",
+    }
+    exp = {
+        "seed": 42,
+        "cohort_id": "pilot",
+        "mr_instruction_mode": "none",
+        "ft_params": {"max_steps": 20},
+    }
+    report = {
+        "stage2_status": "FAIL",
+        "training_gate": "BLOCKED",
+        "automated_checks_status": "PASS",
+        "seed": 42,
+        "cohort_id": "pilot",
+        "data_signature": "data",
+        "manifest_hash": "manifest",
+        "ordered_sample_signature": "order",
+        "instruction_template_version": 2,
+        "mode_reports": {
+            mode: {
+                "converted_train_sha256": "train",
+                "converted_val_sha256": "val",
+            }
+            for mode in ("none", "pair_only")
+        },
+    }
+    report_path = tmp_path / "stage2.json"
+    report_path.write_text(json.dumps(report), encoding="utf-8")
+    evidence_path = tmp_path / "quick_audit.md"
+    evidence_path.write_text("quick audit evidence", encoding="utf-8")
+    config = {
+        "instruction_template_version": 2,
+        "output_root": "output/exploratory",
+        "research_status": {
+            "classification": "exploratory_pilot",
+            "human_validation_status": "QUICK_AUDIT_ONLY_NOT_PASSED",
+            "confirmatory_use_allowed": False,
+        },
+        "stage2_gate": {
+            "required": True,
+            "report": "stage2.json",
+            "exploratory_override": {
+                "enabled": True,
+                "evidence": "quick_audit.md",
+                "evidence_sha256": runner.file_sha256(evidence_path),
+                "allowed_seeds": [42],
+                "allowed_modes": ["none"],
+                "required_output_root": "output/exploratory",
+                "max_training_steps": 20,
+            },
+        },
+    }
+
+    decision = enforce_stage2_training_gate(config, exp, conversion)
+    assert decision["decision"] == "EXPLORATORY_OVERRIDE"
+    assert decision["human_validation_status"] == "QUICK_AUDIT_ONLY_NOT_PASSED"
+    assert decision["confirmatory_use_allowed"] is False
+    assert decision["stage2_report"]["stage2_status"] == "FAIL"
+    assert decision["stage2_report"]["training_gate"] == "BLOCKED"
+    assert decision["evidence"]["sha256"] == runner.file_sha256(evidence_path)
+
+    with pytest.raises(RuntimeError, match="mode 'pair_only' is outside exploratory scope"):
+        enforce_stage2_training_gate(
+            config,
+            {**exp, "mr_instruction_mode": "pair_only"},
+            conversion,
+        )
+
+    with pytest.raises(RuntimeError, match="exploratory output root mismatch"):
+        enforce_stage2_training_gate(
+            config,
+            exp,
+            conversion,
+            output_root=tmp_path / "output" / "wrong",
+        )
+
+    with pytest.raises(RuntimeError, match="exploratory max_steps invalid"):
+        enforce_stage2_training_gate(
+            config,
+            {**exp, "ft_params": {"max_steps": 21}},
+            conversion,
+        )
+
+    evidence_path.write_text("tampered", encoding="utf-8")
+    with pytest.raises(RuntimeError, match="evidence SHA-256 mismatch"):
+        enforce_stage2_training_gate(config, exp, conversion)
+
+
+def test_exploratory_override_rejects_false_human_validation_pass(tmp_path, monkeypatch):
+    monkeypatch.setattr(runner, "WORK_DIR", tmp_path)
+    evidence_path = tmp_path / "audit.md"
+    evidence_path.write_text("audit", encoding="utf-8")
+    report = {
+        "stage2_status": "FAIL",
+        "training_gate": "BLOCKED",
+        "automated_checks_status": "PASS",
+        "seed": 42,
+        "cohort_id": "pilot",
+        "data_signature": "data",
+        "manifest_hash": "manifest",
+        "ordered_sample_signature": "order",
+        "instruction_template_version": 2,
+        "mode_reports": {
+            "none": {
+                "converted_train_sha256": "train",
+                "converted_val_sha256": "val",
+            },
+        },
+    }
+    (tmp_path / "stage2.json").write_text(json.dumps(report), encoding="utf-8")
+    config = {
+        "instruction_template_version": 2,
+        "output_root": "output/exploratory",
+        "research_status": {
+            "classification": "exploratory_pilot",
+            "human_validation_status": "PASS",
+            "confirmatory_use_allowed": False,
+        },
+        "stage2_gate": {
+            "required": True,
+            "report": "stage2.json",
+            "exploratory_override": {
+                "enabled": True,
+                "evidence": "audit.md",
+                "evidence_sha256": runner.file_sha256(evidence_path),
+                "allowed_seeds": [42],
+                "allowed_modes": ["none"],
+                "required_output_root": "output/exploratory",
+                "max_training_steps": 20,
+            },
+        },
+    }
+    conversion = {
+        "data_signature": "data",
+        "manifest_hash": "manifest",
+        "ordered_sample_signature": "order",
+        "converted_train_sha256": "train",
+        "converted_val_sha256": "val",
+    }
+    with pytest.raises(RuntimeError, match="QUICK_AUDIT_ONLY_NOT_PASSED"):
+        enforce_stage2_training_gate(
+            config,
+            {
+                "seed": 42,
+                "cohort_id": "pilot",
+                "mr_instruction_mode": "none",
+                "ft_params": {"max_steps": 20},
+            },
+            conversion,
+        )
+
+
+def test_exploratory_summary_has_non_confirmatory_banner(tmp_path):
+    output_root = tmp_path / "output"
+    exp_dir = output_root / "pilot_seed42"
+    (exp_dir / "tests" / "original").mkdir(parents=True)
+    (exp_dir / "experiment_meta.json").write_text(
+        json.dumps({
+            "task_type": "nli",
+            "research_status": {
+                "classification": "exploratory_pilot",
+                "human_validation_status": "QUICK_AUDIT_ONLY_NOT_PASSED",
+                "confirmatory_use_allowed": False,
+            },
+        }),
+        encoding="utf-8",
+    )
+    write_jsonl(
+        exp_dir / "tests" / "original" / "mnlim.jsonl",
+        [{"correct": True}],
+    )
+    summary_path = output_root / "SUMMARY.md"
+    runner.collect_summary(output_root, summary_path)
+    summary = summary_path.read_text(encoding="utf-8")
+    assert "EXPLORATORY PILOT" in summary
+    assert "Human Validation 未通过" in summary
+    assert "不得作为确认性证据" in summary

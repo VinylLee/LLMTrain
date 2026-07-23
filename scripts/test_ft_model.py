@@ -14,6 +14,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from peft import PeftModel
 
 from project_runtime import PROJECT_ROOT, configure_console_encoding
+from inference_utils import decode_generated_continuations, unpack_generation_inputs
 
 WORK_DIR = PROJECT_ROOT
 
@@ -84,10 +85,15 @@ def load_model(base_model_name, lora_path):
 def call_model(model, tokenizer, prompt, max_tokens=10):
     messages = [{"role": "user", "content": prompt}]
     inputs = tokenizer.apply_chat_template(messages, add_generation_prompt=True, return_tensors="pt").to(model.device)
+    model_inputs, input_length = unpack_generation_inputs(inputs)
     with torch.no_grad():
-        outputs = model.generate(inputs, max_new_tokens=max_tokens, temperature=0.0, do_sample=False)
-    response = tokenizer.decode(outputs[0][inputs.shape[1]:], skip_special_tokens=True).strip().lower().rstrip(".!?,")
-    return response
+        outputs = model.generate(
+            **model_inputs,
+            max_new_tokens=max_tokens,
+            temperature=0.0,
+            do_sample=False,
+        )
+    return decode_generated_continuations(outputs, input_length, tokenizer)[0]
 
 
 def test_dataset(model, tokenizer, ds_name, ds_info, max_samples=500, model_task=None):

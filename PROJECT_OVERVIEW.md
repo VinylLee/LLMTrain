@@ -1,6 +1,6 @@
 # LLMTrain / MetTrain 项目说明
 
-更新日期：2026-07-21
+更新日期：2026-07-23
 
 ## 1. 项目定位
 
@@ -101,7 +101,7 @@ output/<model>/<dataset>/<mr>.jsonl
 - 强制 Hugging Face/Transformers 离线模式，使用本地模型缓存；
 - 支持 `--steps`、`--output-root`、`--progress-file`、`--result-file`，并保证 `--dry-run` 不写目录、元数据或临时 YAML；
 - cohort 复用前强制校验 `cohort_meta.json`、`sampling_report.json`、sample/pair manifest 哈希、数据签名与完整 group multiset；旧 cohort 缺元数据时默认拒绝，只有显式 `--initialize-cohort-metadata` 才会在验证通过后补建；
-- MR-as-Instruction 配置可声明 `stage2_gate`；进入 finetune 前必须同时满足 Stage 2 `PASS`、training gate `OPEN`，并核对 cohort/manifest/order/template 与当前 mode 的转换文件哈希；
+- MR-as-Instruction 配置可声明 `stage2_gate`；正式实验进入 finetune 前必须同时满足 Stage 2 `PASS`、training gate `OPEN`，并核对 cohort/manifest/order/template 与当前 mode 的转换文件哈希。受限 exploratory pilot 可使用带证据文件哈希、seed/mode 白名单和非确认性元数据的显式 override，但不会改变原 Stage 2/Human Validation 状态；
 - 单 seed 时生成 `SUMMARY.md`，多 seed 时生成 `RESULTS.md`。
 
 当前推荐命令：
@@ -343,11 +343,17 @@ Gemma 具体准确率见 `output/experiments/gemma3_4b_nli/RESULTS.md`；Llama �
 - 21 组全部完成微调和测试（2026-07-20 ~ 2026-07-21），168 个测试 JSONL 文件生成并验证；
 - 数据采样与 Gemma 对应文件逐字节一致，确保"仅换基座模型"的公平对照；
 
-### 5.4 MR-as-Instruction Pilot Stage 2（2026-07-22）
+### 5.4 MR-as-Instruction Pilot Stage 2 / Exploratory Stage 3（2026-07-23）
 
 `experiments_config_mrinstr_pilot.json` 定义 MNLI 4413、seed 42 的六种 conversion mode：`none`、`operation_only`、`pair_only`、`pair_operation`、`shuffled_operation`、`full_oracle`。六种 mode 共享同一 sampled file 与 split manifest，均生成 train 4174 / validation 239。
 
-`scripts/validate_mrinstr_conversion.py` 对 cohort 复用元数据、模板版本、行序、manifest/data signature、转换文件 SHA-256、validation generic instruction、pair/shuffled 对齐、shuffled confusion matrix 和实际 tokenizer 整体/by-MR 长度做自动验证。当前 125/125 自动检查通过。runner 也会在 finetune 前强制核对 Stage 2 `PASS/OPEN`，当前负向 dry-run 已确认会在训练命令生成前阻断。四类数据质量风险仍使 Stage 2 总体为 FAIL、训练门槛为 BLOCKED；Stage 3/4 尚未启动。人工修订/标注协议见 `.research/MR_INSTRUCTION_DATA_REVIEW_PROTOCOL.md`，交接见 `.research/MR_INSTRUCTION_STAGE2_HANDOFF.md`，ignored 报告见 `artifacts/mrinstr_validation/`。
+`scripts/validate_mrinstr_conversion.py` 对 cohort 复用元数据、模板版本、行序、manifest/data signature、转换文件 SHA-256、validation generic instruction、pair/shuffled 对齐、shuffled confusion matrix 和实际 tokenizer 整体/by-MR 长度做自动验证。当前 125/125 自动检查通过。四类数据质量风险仍使 Stage 2 总体为 **FAIL**、原 training gate 为 **BLOCKED**，Human Validation 没有通过。
+
+`artifacts/mrinstr_annotation/MR_QUICK_SAMPLE_AUDIT_40.md` 是一次快速单人分层抽查：40 条中 stored label 明确不同意 17 条、不确定 11 条，变换无效 21 条。该证据不能估计全体噪声率，也不能支持 Human Validation PASS；用户据此批准仅以 exploratory pilot 名义进入 Stage 3。配置中的显式 override 只允许 seed 42 的 `none`、`pair_operation`、`shuffled_operation`，首轮强制 `max_steps=20`，证据文件必须 SHA-256 匹配，且 CLI 不能把输出重定向到隔离目录 `output/experiments/gemma3_4b_mrinstr_exploratory_smoke_v1/` 之外。runner、experiment meta、gate decision、run signature 和结果汇总都会保留 `QUICK_AUDIT_ONLY_NOT_PASSED` 与 `confirmatory_use_allowed=false`。`operation_only` 和错误输出根的负向 dry-run 均在训练命令生成前被拒绝。
+
+三个核心模式已完成实际 20-step smoke，均成功执行 eval、保存 checkpoint/adapter，并记录 `global_step=20`。`none`、`pair_operation`、`shuffled_operation` 的 train/eval loss 分别为 1.2993/0.1170、0.9316/0.1133、0.9678/0.1332；这些数值只用于 pipeline health，不能作模式优劣结论。`none` adapter 在相同 8 条 MNLI Original 上的 batch 1/32 贪婪预测 8/8 一致，两份 JSONL 逐字节相同。迁移中发现并修复 dataset registry 远端绝对路径、Windows CRLF 转换哈希和 Transformers 5 `BatchEncoding` 单条推理兼容问题；修复后 Stage 2 自动检查恢复 125/125。旧失败现场保留，成功 smoke 报告见 ignored 的 `artifacts/mrinstr_validation/stage3_exploratory_smoke_report.{json,md}`。Stage 4 与任何确认性结论仍禁止。
+
+`scripts/prepare_mrinstr_annotation.py` 将人工协议物化为可复现的双人独立复核批次。它从 cohort 和实际 Gemma tokenizer 重算 1114 条 blocker 的 stable sample key、完整 pair context、token 长度、来源签名和同 pair sibling context；为每位标注者独立打乱顺序，并按每 100 条唯一任务插入 5 条稳定性复测。当前 `artifacts/mrinstr_annotation/` 已生成 `annotation_batch_manifest.json` 与两份未填写 JSONL 模板：每份 1114 条唯一任务、1174 个展示项、12 个批次、60 条复测。生成器默认只校验已存在的完整批次，拒绝覆盖部分或已有标注文件；模板不代表人工审查已经完成。
 
 ## 6. 结果文件的权威性
 

@@ -11,7 +11,7 @@
 1. 通用 LLM API 推理：`scripts/test_llm.py` + `scripts/run_all.sh`，随后由 `scripts/evaluate.py`、`scripts/mrv.py`、`scripts/mrv_excel.py` 评估。
 2. 系统化 LoRA 实验：Gemma 使用 `experiments_config.json`，Llama 3.2 使用 `experiments_config_llama32_3b.json`，均由 `scripts/run_batch_experiments.py` 编排采样、转换、微调、Original/MR 测试和汇总。
 
-## 当前实验状态（2026-07-21）
+## 当前实验状态（2026-07-23）
 
 - 模型：`google/gemma-3-4b-it`，LoRA rank 8，学习率 3e-4，3 epochs，batch 4，gradient accumulation 8。
 - 已完成 7 组 × seed 42/43/44：MetTrain MNLI、MetTrain SICK-4439、MetTrain SICK-11176、MetTrain SNLI、Original MNLI、Original SICK、Original SNLI。
@@ -21,7 +21,7 @@
 - Llama 请求模型为 `meta-llama/Llama-3.2-3B-Instruct`；因 HF 账号无 gated 权限，实际使用并记录为非量化 BF16 镜像 `unsloth/Llama-3.2-3B-Instruct`。
 - 结果文件：`output/experiments/llama32_3b_nli/RESULTS.md`（三种子汇总），`COMPARISON_vs_Gemma.md`（配对差值表）。
 - `experiments_config.json` 还定义了 MetTrain/Original RTE，但当前系统实验目录没有对应三种子结果；不要把它写成已完成。
-- MR-as-Instruction Pilot 的 Stage 2 conversion/工程硬门槛修补已完成：template v2、稳定行序、严格 manifest、cohort metadata/signature 复用校验、整体/by-MR tokenizer 报告、报告哈希和 shuffled confusion matrix 均已验证，125/125 自动检查通过；runner 会在 finetune 前强制 Stage 2 `PASS/OPEN`。但 adding_contradiction、composite_flip、conditional_clause、pronoun_substitution 的数据质量风险仍使 Stage 2 为 FAIL、training gate 为 BLOCKED。Stage 3/4 未启动，也不得在人工解除 blocker 前训练。人工协议见 `.research/MR_INSTRUCTION_DATA_REVIEW_PROTOCOL.md`，交接见 `.research/MR_INSTRUCTION_STAGE2_HANDOFF.md`，报告见 ignored 的 `artifacts/mrinstr_validation/`。
+- MR-as-Instruction Pilot 的 Stage 2 conversion/工程硬门槛修补已完成，125/125 自动检查通过；adding_contradiction、composite_flip、conditional_clause、pronoun_substitution 的 1114 条数据质量风险仍使 Stage 2 为 **FAIL**、原 training gate 为 **BLOCKED**，Human Validation 未通过。`MR_QUICK_SAMPLE_AUDIT_40.md` 的快速单人抽查发现 17/40 标签明确不同意、11/40 不确定、21/40 变换无效；它只支持探索性决策，不能标记 Human Validation PASS。用户已批准以 **exploratory pilot** 名义进入受限 Stage 3：仅 seed 42 的 `none`、`pair_operation`、`shuffled_operation`，首轮强制 `max_steps=20`，独立输出根为 `output/experiments/gemma3_4b_mrinstr_exploratory_smoke_v1/`，证据哈希、seed/mode/训练时长/输出目录白名单和 `confirmatory_use_allowed=false` 由 runner 强制校验。三个模式均已完成 20/20 steps、eval、checkpoint 和 adapter 保存；`none` adapter 的 8 条 MNLI 推理在 batch 1/32 下逐字节一致。迁移中发现的 dataset registry 远端绝对路径、Windows CRLF 哈希和 Transformers 5 `BatchEncoding` 单条推理兼容问题均已修复；旧失败现场保留。ignored 报告见 `artifacts/mrinstr_validation/stage3_exploratory_smoke_report.{json,md}`。这些 loss/8 条准确率仅是 pipeline health signal，不是效果结论。Stage 4、正式结论和确认性报告仍须完整 Human Validation/裁决后才能进行。双人复核模板仍保留在 ignored 的 `artifacts/mrinstr_annotation/`，但当前可跳过全量填写；不得把模板或快速抽查写成正式验证通过。
 - 运行入口已完成 Windows/Linux 跨平台改造：项目根目录由脚本位置推导，持久化相对路径统一为 POSIX 格式，子进程使用参数列表和独立 `env`，CUDA 默认设备统一为 0。Gemma 缓存可用 `scripts/cache_hf_model.py` 下载并离线验证；gated 仓库必须先在当前环境完成 Hugging Face 授权。
 
 ## 目录约定

@@ -307,8 +307,14 @@ def validate_cohort_artifacts(exp, cohort_dir):
     }
 
 
-def enforce_stage2_training_gate(config, exp, conversion_report):
-    """Refuse finetune unless the configured Stage 2 report is PASS/OPEN."""
+def enforce_stage2_training_gate(config, exp, conversion_report, output_root=None):
+    """Return an auditable gate decision or refuse finetune.
+
+    A normal run still requires Stage 2 PASS/OPEN.  A deliberately configured
+    exploratory override may admit a narrow seed/mode scope while preserving
+    the report's FAIL/BLOCKED status and recording that human validation did
+    not pass.
+    """
     gate = config.get("stage2_gate") or {}
     if not gate.get("required", False):
         return None
@@ -323,8 +329,6 @@ def enforce_stage2_training_gate(config, exp, conversion_report):
     mode_report = (report.get("mode_reports") or {}).get(mode) or {}
     failures = []
     expected = {
-        "stage2_status": "PASS",
-        "training_gate": "OPEN",
         "automated_checks_status": "PASS",
         "seed": exp.get("seed", 42),
         "cohort_id": exp.get("cohort_id"),
@@ -344,11 +348,115 @@ def enforce_stage2_training_gate(config, exp, conversion_report):
             )
     if failures:
         raise RuntimeError("Stage 2 training gate blocked:\n  " + "\n  ".join(failures))
-    return report
+
+    report_identity = {
+        "report": workspace_relative(report_path),
+        "report_sha256": file_sha256(report_path),
+        "stage2_status": report.get("stage2_status"),
+        "training_gate": report.get("training_gate"),
+        "automated_checks_status": report.get("automated_checks_status"),
+    }
+    if report.get("stage2_status") == "PASS" and report.get("training_gate") == "OPEN":
+        decision = {
+            "schema_version": 1,
+            "decision": "STAGE2_PASS",
+            "seed": exp.get("seed", 42),
+            "mr_instruction_mode": mode,
+            "stage2_report": report_identity,
+        }
+        decision["sha256"] = canonical_sha256(decision)
+        return decision
+
+    override = gate.get("exploratory_override") or {}
+    research_status = config.get("research_status") or {}
+    override_failures = []
+    if not override.get("enabled", False):
+        override_failures.append("exploratory override is not enabled")
+    if report.get("stage2_status") != "FAIL" or report.get("training_gate") != "BLOCKED":
+        override_failures.append(
+            "exploratory override requires the original Stage 2 status to remain FAIL/BLOCKED"
+        )
+    if research_status.get("classification") != "exploratory_pilot":
+        override_failures.append("research_status.classification must be exploratory_pilot")
+    if research_status.get("human_validation_status") != "QUICK_AUDIT_ONLY_NOT_PASSED":
+        override_failures.append(
+            "research_status.human_validation_status must be QUICK_AUDIT_ONLY_NOT_PASSED"
+        )
+    if research_status.get("confirmatory_use_allowed") is not False:
+        override_failures.append("research_status.confirmatory_use_allowed must be false")
+    if exp.get("seed", 42) not in override.get("allowed_seeds", []):
+        override_failures.append(f"seed {exp.get('seed', 42)} is outside exploratory scope")
+    if mode not in override.get("allowed_modes", []):
+        override_failures.append(f"mode {mode!r} is outside exploratory scope")
+    required_output_root = override.get("required_output_root")
+    if not required_output_root:
+        override_failures.append("exploratory required_output_root is not configured")
+    else:
+        actual_output_root = (
+            workspace_relative(output_root)
+            if output_root is not None
+            else Path(config.get("output_root", "")).as_posix()
+        )
+        if actual_output_root != Path(required_output_root).as_posix():
+            override_failures.append(
+                "exploratory output root mismatch: "
+                f"expected={required_output_root!r} actual={actual_output_root!r}"
+            )
+    max_training_steps = override.get("max_training_steps")
+    configured_steps = (exp.get("ft_params") or {}).get("max_steps")
+    if (
+        not isinstance(max_training_steps, int)
+        or max_training_steps < 1
+        or not isinstance(configured_steps, int)
+        or configured_steps < 1
+        or configured_steps > max_training_steps
+    ):
+        override_failures.append(
+            "exploratory max_steps invalid: "
+            f"configured={configured_steps!r} limit={max_training_steps!r}"
+        )
+
+    evidence_value = override.get("evidence")
+    evidence_path = resolve_workspace_path(evidence_value) if evidence_value else None
+    if evidence_path is None or not evidence_path.is_file():
+        override_failures.append(f"exploratory evidence is missing: {evidence_path}")
+        evidence_sha256 = None
+    else:
+        evidence_sha256 = file_sha256(evidence_path)
+        if evidence_sha256 != override.get("evidence_sha256"):
+            override_failures.append(
+                "exploratory evidence SHA-256 mismatch: "
+                f"expected={override.get('evidence_sha256')!r} actual={evidence_sha256!r}"
+            )
+    if override_failures:
+        raise RuntimeError(
+            "Stage 2 training gate blocked; exploratory override invalid:\n  "
+            + "\n  ".join(override_failures)
+        )
+
+    decision = {
+        "schema_version": 1,
+        "decision": "EXPLORATORY_OVERRIDE",
+        "classification": "exploratory_pilot",
+        "human_validation_status": "QUICK_AUDIT_ONLY_NOT_PASSED",
+        "confirmatory_use_allowed": False,
+        "max_training_steps": configured_steps,
+        "output_root": required_output_root,
+        "seed": exp.get("seed", 42),
+        "mr_instruction_mode": mode,
+        "stage2_report": report_identity,
+        "evidence": {
+            "file": workspace_relative(evidence_path),
+            "sha256": evidence_sha256,
+        },
+    }
+    decision["sha256"] = canonical_sha256(decision)
+    return decision
 
 
 def build_run_signature(exp, config, git_sha, data_signature=None,
-                        manifest_hash=None, test_signatures=None):
+                        manifest_hash=None, test_signatures=None,
+                        gate_decision=None):
     """Immutable identity for safe resume/reuse of a scientific run."""
     payload = {
         "schema_version": 1,
@@ -373,13 +481,17 @@ def build_run_signature(exp, config, git_sha, data_signature=None,
         "training": exp.get("ft_params", {}),
         "generation": config.get("generation", {"do_sample": False, "max_new_tokens": 10}),
         "test_sets": test_signatures or {},
+        "research_status": config.get("research_status"),
+        "stage2_gate_decision_sha256": (
+            gate_decision.get("sha256") if gate_decision else None
+        ),
     }
     return {"run_signature": canonical_sha256(payload), "run_signature_payload": payload}
 
 
 def load_config(path):
     """加载 JSON 配置文件"""
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -392,7 +504,7 @@ def resolve_workspace_path(path_value):
 def load_progress(progress_file):
     """加载进度文件（如果存在）"""
     if progress_file.exists():
-        with open(progress_file) as f:
+        with open(progress_file, encoding="utf-8") as f:
             return json.load(f)
     return {}
 
@@ -400,8 +512,8 @@ def load_progress(progress_file):
 def save_progress(progress_file, progress):
     """保存进度文件"""
     progress_file.parent.mkdir(parents=True, exist_ok=True)
-    with open(progress_file, "w") as f:
-        json.dump(progress, f, indent=2)
+    with open(progress_file, "w", encoding="utf-8", newline="\n") as f:
+        json.dump(progress, f, indent=2, ensure_ascii=False)
 
 
 def step_completed(progress, exp_name, step):
@@ -435,6 +547,11 @@ def run_cmd(cmd, desc, dry_run=False, cwd=None, env=None):
 def build_yaml(exp, model_name, template, output_root):
     """生成微调 YAML 配置内容"""
     p = exp.get("ft_params", {})
+    duration = (
+        f"max_steps: {p['max_steps']}"
+        if p.get("max_steps") is not None
+        else f"num_train_epochs: {p.get('epochs', 3.0)}"
+    )
     return f"""### LoRA Fine-tuning: {exp['name']}
 # Task type: {exp['task_type']}
 # Generated: {datetime.now().isoformat()}
@@ -446,11 +563,12 @@ lora_rank: {p.get('rank', 8)}
 lora_alpha: {p.get('rank', 8) * 2}
 lora_dropout: 0.05
 dataset: {exp['name']}
+dataset_dir: {(WORK_DIR / 'data').as_posix()}
 cutoff_len: 512
 per_device_train_batch_size: {p.get('batch', 4)}
 gradient_accumulation_steps: {p.get('grad_accum', 8)}
 learning_rate: {p.get('lr', 3e-4)}
-num_train_epochs: {p.get('epochs', 3.0)}
+{duration}
 lr_scheduler_type: cosine
 warmup_ratio: 0.1
 logging_steps: 10
@@ -494,10 +612,13 @@ def save_experiment_meta(exp, model_name, template, output_root, config):
         "cohort_id": exp.get("cohort_id"),
         "strict_pairing": exp.get("strict_pairing", False),
         "instruction_template_version": config.get("instruction_template_version", 2),
+        "research_status": config.get("research_status"),
         "conda_environment": "llmtrain310",
     }
-    with open(meta_dir / "experiment_meta.json", "w") as f:
-        json.dump(meta, f, indent=2)
+    with open(
+        meta_dir / "experiment_meta.json", "w", encoding="utf-8", newline="\n"
+    ) as f:
+        json.dump(meta, f, indent=2, ensure_ascii=False)
 
 
 def run_experiment(exp, config, output_root, progress_file, selected_steps,
@@ -698,9 +819,15 @@ def run_experiment(exp, config, output_root, progress_file, selected_steps,
                 raise RuntimeError("训练 dry-run 前仍需现有 conversion report 和 split manifest")
             raise RuntimeError("训练前缺少 conversion report 或 split manifest")
         conversion = json.loads(report_path.read_text(encoding="utf-8"))
-        enforce_stage2_training_gate(config, exp, conversion)
-        if dry_run:
+        gate_decision = enforce_stage2_training_gate(
+            config, exp, conversion, output_root=output_root
+        )
+        if gate_decision and gate_decision.get("decision") == "EXPLORATORY_OVERRIDE":
+            print("    ⚠️  EXPLORATORY PILOT：Human Validation 未通过")
+            print("    ⚠️  Stage 2 仍为 FAIL/BLOCKED；结果不得作为确认性证据")
+        elif dry_run:
             print("    [DRY-RUN] Stage 2 gate 已验证为 PASS/OPEN")
+        if dry_run:
             print("    [DRY-RUN] run_signature 将使用现有 conversion 产物计算并校验")
         test_signatures = {}
         for test_kind, mapping in config.get("test_sets", {}).items():
@@ -714,19 +841,29 @@ def run_experiment(exp, config, output_root, progress_file, selected_steps,
                          for p in sorted(path.rglob("*.json"))])
         if not dry_run:
             signature = build_run_signature(
-            exp, config, git_sha, conversion.get("data_signature"),
-            conversion.get("manifest_hash"), test_signatures)
+                exp, config, git_sha, conversion.get("data_signature"),
+                conversion.get("manifest_hash"), test_signatures,
+                gate_decision)
         signature_path = exp_dir / "run_signature.json"
+        gate_decision_path = exp_dir / "stage2_gate_decision.json"
         if not dry_run and signature_path.exists():
-            existing = json.loads(signature_path.read_text())
+            existing = json.loads(signature_path.read_text(encoding="utf-8"))
             if existing.get("run_signature") != signature["run_signature"]:
                 raise RuntimeError("run_signature 不匹配，拒绝 resume/reuse")
         elif not dry_run:
-            signature_path.write_text(json.dumps(signature, indent=2, ensure_ascii=False))
+            signature_path.write_text(
+                json.dumps(signature, indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
+        if not dry_run and gate_decision is not None:
+            gate_decision_path.write_text(
+                json.dumps(gate_decision, indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
         yaml_content = build_yaml(exp, model_name, template, output_root)
         yaml_path = WORK_DIR / f"ft_config_{name}.yaml"
         if not dry_run:
-            yaml_path.write_text(yaml_content)
+            yaml_path.write_text(yaml_content, encoding="utf-8")
 
         ok = run_cmd(
             [sys.executable, "-m", "llamafactory.cli", "train", yaml_path],
@@ -823,7 +960,7 @@ def collect_summary(output_root, summary_file):
         if not meta_file.exists():
             continue
 
-        with open(meta_file) as f:
+        with open(meta_file, encoding="utf-8") as f:
             meta = json.load(f)
 
         # 读取原始测试结果
@@ -833,7 +970,7 @@ def collect_summary(output_root, summary_file):
             for ds_file in sorted(orig_dir.glob("*.jsonl")):
                 ds_name = ds_file.stem
                 total = correct = 0
-                with open(ds_file) as f:
+                with open(ds_file, encoding="utf-8") as f:
                     for line in f:
                         if line.strip():
                             try:
@@ -857,7 +994,7 @@ def collect_summary(output_root, summary_file):
             for ds_file in sorted(mr_dir.glob("*.jsonl")):
                 ds_name = ds_file.stem
                 total = correct = 0
-                with open(ds_file) as f:
+                with open(ds_file, encoding="utf-8") as f:
                     for line in f:
                         if line.strip():
                             try:
@@ -878,6 +1015,7 @@ def collect_summary(output_root, summary_file):
             summaries.append({
                 "name": exp_dir.name,
                 "task_type": meta.get("task_type", "nli"),
+                "research_status": meta.get("research_status"),
                 "original": original_results,
                 "mr": mr_results,
             })
@@ -885,9 +1023,18 @@ def collect_summary(output_root, summary_file):
     # 写 SUMMARY.md
     all_ds = ["mnlim", "mnlimm", "sick", "snli"]
     summary_file.parent.mkdir(parents=True, exist_ok=True)
-    with open(summary_file, "w") as f:
+    with open(summary_file, "w", encoding="utf-8", newline="\n") as f:
         f.write("# 批量实验测试结果汇总\n\n")
         f.write(f"生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+        if any(
+            (summary.get("research_status") or {}).get("classification")
+            == "exploratory_pilot"
+            for summary in summaries
+        ):
+            f.write(
+                "> **EXPLORATORY PILOT — Human Validation 未通过。** "
+                "Stage 2 仍为 FAIL/BLOCKED；以下结果不得作为确认性证据。\n\n"
+            )
 
         for s in summaries:
             f.write(f"## {s['name']} ({'二分类' if s['task_type'] == 'nli-binary' else '三分类'})\n\n")
@@ -928,7 +1075,7 @@ def collect_test_results(exp_dir):
             for ds_file in sorted(tdir.glob("*.jsonl")):
                 ds_name = ds_file.stem
                 total = correct = 0
-                with open(ds_file) as f:
+                with open(ds_file, encoding="utf-8") as f:
                     for line in f:
                         if line.strip():
                             try:
@@ -985,11 +1132,17 @@ def aggregate_results(seeds, config, output_root, result_file, expected_names):
     mr_ds = list(ts.get("mr", {}).keys())
 
     result_file.parent.mkdir(parents=True, exist_ok=True)
-    with open(result_file, "w") as f:
+    with open(result_file, "w", encoding="utf-8", newline="\n") as f:
         f.write("# 实验结果汇总\n\n")
         seed_str = ", ".join(str(s) for s in sorted(seeds))
         f.write(f"种子: {seed_str}  ")
         f.write(f"模型: {config.get('model', 'google/gemma-3-4b-it')}\n\n")
+        research_status = config.get("research_status") or {}
+        if research_status.get("classification") == "exploratory_pilot":
+            f.write(
+                "> **EXPLORATORY PILOT — Human Validation 未通过。** "
+                "Stage 2 仍为 FAIL/BLOCKED；以下结果不得作为确认性证据。\n\n"
+            )
 
         for section_title, ds_list, test_type_label in [
             ("Original (acc)", original_ds, "original"),
@@ -1194,6 +1347,11 @@ def main():
     print(f"  输出根目录: {output_root}")
     print(f"  进度文件: {progress_file}")
     print(f"  模式: {'干跑' if args.dry_run else '执行'}")
+    research_status = config.get("research_status") or {}
+    if research_status.get("classification") == "exploratory_pilot":
+        print("  ⚠️  研究口径: EXPLORATORY PILOT")
+        print("  ⚠️  Human Validation: QUICK AUDIT ONLY — NOT PASSED")
+        print("  ⚠️  禁止将本轮结果作为确认性证据")
     if args.resume:
         print(f"  断点续跑: 是")
     if args.stratify:

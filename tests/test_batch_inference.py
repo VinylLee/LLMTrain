@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
-from inference_utils import decode_generated_continuations
+from inference_utils import decode_generated_continuations, unpack_generation_inputs
 
 
 class FakeTokenizer:
@@ -37,3 +37,19 @@ def test_batch_slicing_matches_individual_slicing():
     together = decode_generated_continuations(batch, 2, FakeTokenizer())
     apart = [decode_generated_continuations(row.unsqueeze(0), 2, FakeTokenizer())[0] for row in batch]
     assert together == apart
+
+
+def test_unpack_generation_inputs_supports_tensor_and_mapping():
+    tensor = torch.tensor([[1, 2, 3]])
+    tensor_inputs, tensor_width = unpack_generation_inputs(tensor)
+    assert set(tensor_inputs) == {"input_ids"}
+    assert tensor_inputs["input_ids"] is tensor
+    assert tensor_width == 3
+
+    mapping = {
+        "input_ids": torch.tensor([[1, 2]]),
+        "attention_mask": torch.tensor([[1, 1]]),
+    }
+    mapped_inputs, mapped_width = unpack_generation_inputs(mapping)
+    assert set(mapped_inputs) == {"input_ids", "attention_mask"}
+    assert mapped_width == 2
