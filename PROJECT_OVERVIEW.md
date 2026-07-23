@@ -353,6 +353,8 @@ Gemma 具体准确率见 `output/experiments/gemma3_4b_nli/RESULTS.md`；Llama �
 
 三个核心模式已完成实际 20-step smoke，均成功执行 eval、保存 checkpoint/adapter，并记录 `global_step=20`。`none`、`pair_operation`、`shuffled_operation` 的 train/eval loss 分别为 1.2993/0.1170、0.9316/0.1133、0.9678/0.1332；这些数值只用于 pipeline health，不能作模式优劣结论。`none` adapter 在相同 8 条 MNLI Original 上的 batch 1/32 贪婪预测 8/8 一致，两份 JSONL 逐字节相同。迁移中发现并修复 dataset registry 远端绝对路径、Windows CRLF 转换哈希和 Transformers 5 `BatchEncoding` 单条推理兼容问题；修复后 Stage 2 自动检查恢复 125/125。旧失败现场保留，成功 smoke 报告见 ignored 的 `artifacts/mrinstr_validation/stage3_exploratory_smoke_report.{json,md}`。Stage 4 与任何确认性结论仍禁止。
 
+独立 full 配置 `experiments_config_mrinstr_exploratory_full_seed42.json` 进一步把同一三个 mode 限制为 seed 42、最多 3 epochs，并固定隔离输出根 `output/experiments/gemma3_4b_mrinstr_exploratory_full_seed42_v1/`。三组 393/393 steps 均已完成，最终 eval loss 为 `none=0.09847`、`pair_operation=0.16866`、`shuffled_operation=0.13062`。`none` 首次运行在 340 步后因外层监控超时中断，随后由 runner 从完整 `checkpoint-300` 恢复并完成；其 `train_results.json` 的 runtime/loss 只覆盖恢复段，不能与另外两组直接比较。三组均观察到中期 eval 优于最终 eval，但 `save_total_limit=2` 已滚动删除中期最佳 checkpoint，因此当前权威可用产物是最终 3-epoch adapter，不能事后把中期日志最佳值当作可加载模型。用户要求在此暂停：Stage 4 未启动；后续 GPU 训练/推理/评测转到远程服务器执行，本机继续负责源码、审计、结果分析和实验决策。GPU 执行交接见 `GPU_EXECUTION_HANDOFF.md`。
+
 `scripts/prepare_mrinstr_annotation.py` 将人工协议物化为可复现的双人独立复核批次。它从 cohort 和实际 Gemma tokenizer 重算 1114 条 blocker 的 stable sample key、完整 pair context、token 长度、来源签名和同 pair sibling context；为每位标注者独立打乱顺序，并按每 100 条唯一任务插入 5 条稳定性复测。当前 `artifacts/mrinstr_annotation/` 已生成 `annotation_batch_manifest.json` 与两份未填写 JSONL 模板：每份 1114 条唯一任务、1174 个展示项、12 个批次、60 条复测。生成器默认只校验已存在的完整批次，拒绝覆盖部分或已有标注文件；模板不代表人工审查已经完成。
 
 ## 6. 结果文件的权威性

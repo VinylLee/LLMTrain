@@ -39,6 +39,31 @@ def test_exploratory_yaml_uses_max_steps_instead_of_full_epochs(tmp_path):
     assert "num_train_epochs:" not in text
 
 
+def test_yaml_resumes_only_from_latest_complete_checkpoint(tmp_path):
+    model_dir = tmp_path / "pilot_seed42" / "model"
+    valid = model_dir / "checkpoint-300"
+    partial = model_dir / "checkpoint-350"
+    valid.mkdir(parents=True)
+    partial.mkdir()
+    for name in (
+        "adapter_model.safetensors",
+        "optimizer.pt",
+        "scheduler.pt",
+        "rng_state.pth",
+    ):
+        (valid / name).write_bytes(b"complete")
+    (valid / "trainer_state.json").write_text(
+        json.dumps({"global_step": 300}), encoding="utf-8"
+    )
+    (partial / "trainer_state.json").write_text(
+        json.dumps({"global_step": 350}), encoding="utf-8"
+    )
+
+    text = build_yaml(experiment(), "model", "gemma", tmp_path)
+    assert f"resume_from_checkpoint: {valid.as_posix()}" in text
+    assert partial.as_posix() not in text
+
+
 def test_run_cmd_passes_argv_and_environment_without_shell(tmp_path, monkeypatch):
     captured = {}
 
@@ -298,6 +323,83 @@ def test_stage2_gate_allows_narrow_audited_exploratory_override(tmp_path, monkey
     evidence_path.write_text("tampered", encoding="utf-8")
     with pytest.raises(RuntimeError, match="evidence SHA-256 mismatch"):
         enforce_stage2_training_gate(config, exp, conversion)
+
+
+def test_exploratory_override_allows_bounded_epoch_budget(tmp_path, monkeypatch):
+    monkeypatch.setattr(runner, "WORK_DIR", tmp_path)
+    conversion = {
+        "data_signature": "data",
+        "manifest_hash": "manifest",
+        "ordered_sample_signature": "order",
+        "converted_train_sha256": "train",
+        "converted_val_sha256": "val",
+    }
+    exp = {
+        "seed": 42,
+        "cohort_id": "pilot",
+        "mr_instruction_mode": "pair_operation",
+        "ft_params": {"epochs": 3.0},
+    }
+    report = {
+        "stage2_status": "FAIL",
+        "training_gate": "BLOCKED",
+        "automated_checks_status": "PASS",
+        "seed": 42,
+        "cohort_id": "pilot",
+        "data_signature": "data",
+        "manifest_hash": "manifest",
+        "ordered_sample_signature": "order",
+        "instruction_template_version": 2,
+        "mode_reports": {
+            "pair_operation": {
+                "converted_train_sha256": "train",
+                "converted_val_sha256": "val",
+            },
+        },
+    }
+    (tmp_path / "stage2.json").write_text(json.dumps(report), encoding="utf-8")
+    evidence_path = tmp_path / "quick_audit.md"
+    evidence_path.write_text("quick audit evidence", encoding="utf-8")
+    config = {
+        "instruction_template_version": 2,
+        "output_root": "output/exploratory-full",
+        "research_status": {
+            "classification": "exploratory_pilot",
+            "human_validation_status": "QUICK_AUDIT_ONLY_NOT_PASSED",
+            "confirmatory_use_allowed": False,
+        },
+        "stage2_gate": {
+            "required": True,
+            "report": "stage2.json",
+            "exploratory_override": {
+                "enabled": True,
+                "evidence": "quick_audit.md",
+                "evidence_sha256": runner.file_sha256(evidence_path),
+                "allowed_seeds": [42],
+                "allowed_modes": ["pair_operation"],
+                "required_output_root": "output/exploratory-full",
+                "max_training_epochs": 3.0,
+            },
+        },
+    }
+
+    decision = enforce_stage2_training_gate(config, exp, conversion)
+    assert decision["decision"] == "EXPLORATORY_OVERRIDE"
+    assert decision["max_training_epochs"] == 3.0
+    assert "max_training_steps" not in decision
+
+    with pytest.raises(RuntimeError, match="exploratory epochs invalid"):
+        enforce_stage2_training_gate(
+            config,
+            {**exp, "ft_params": {"epochs": 3.1}},
+            conversion,
+        )
+    with pytest.raises(RuntimeError, match="exploratory epochs invalid"):
+        enforce_stage2_training_gate(
+            config,
+            {**exp, "ft_params": {"epochs": 3.0, "max_steps": 20}},
+            conversion,
+        )
 
 
 def test_exploratory_override_rejects_false_human_validation_pass(tmp_path, monkeypatch):

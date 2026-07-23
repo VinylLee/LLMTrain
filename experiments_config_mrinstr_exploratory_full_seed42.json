@@ -1,0 +1,55 @@
+{
+  "model": "google/gemma-3-4b-it",
+  "tokenizer": "google/gemma-3-4b-it",
+  "local_model_path": "models/google/gemma-3-4b-it",
+  "local_tokenizer_path": "models/google/gemma-3-4b-it",
+  "template": "gemma",
+  "template_version": 1,
+  "instruction_template_version": 2,
+  "cuda": "0",
+  "output_root": "output/experiments/gemma3_4b_mrinstr_exploratory_full_seed42_v1",
+  "generation": {"do_sample": false, "max_new_tokens": 10},
+  "research_status": {
+    "classification": "exploratory_pilot",
+    "phase": "full_seed42",
+    "human_validation_status": "QUICK_AUDIT_ONLY_NOT_PASSED",
+    "confirmatory_use_allowed": false,
+    "reporting_label": "EXPLORATORY FULL SEED-42 — Human Validation not passed"
+  },
+  "stage2_gate": {
+    "required": true,
+    "report": "artifacts/mrinstr_validation/stage2_report.json",
+    "exploratory_override": {
+      "enabled": true,
+      "evidence": "artifacts/mrinstr_annotation/MR_QUICK_SAMPLE_AUDIT_40.md",
+      "evidence_sha256": "7394a1b79870d241d01cac7bfd1ab9c8001944d18562abec0dda4ca7cad8b12c",
+      "allowed_seeds": [42],
+      "allowed_modes": ["none", "pair_operation", "shuffled_operation"],
+      "required_output_root": "output/experiments/gemma3_4b_mrinstr_exploratory_full_seed42_v1",
+      "max_training_epochs": 3.0
+    }
+  },
+  "experiments": [
+    {"name": "mettrain_mnlim_4413_gemma3_4b_mrpilot_none", "mr_instruction_mode": "none"},
+    {"name": "mettrain_mnlim_4413_gemma3_4b_mrpilot_pairop", "mr_instruction_mode": "pair_operation"},
+    {"name": "mettrain_mnlim_4413_gemma3_4b_mrpilot_shuffled", "mr_instruction_mode": "shuffled_operation"}
+  ],
+  "experiment_defaults": {
+    "train_data": "data/nli/mettrain/mnlim_lr0.0051_gemma-3-4b-it-qat/augmented_data.json",
+    "target": 4413,
+    "task_type": "nli",
+    "cohort_id": "mettrain_mnlim_4413_gemma3_4b_mrpilot_v1",
+    "strict_pairing": true,
+    "val_ratio": 0.05,
+    "cutoff_len": 512,
+    "eval_strategy": "steps",
+    "eval_steps": 50,
+    "save_steps": 50,
+    "save_total_limit": 2,
+    "ft_params": {"lr": 0.0003, "epochs": 3.0, "rank": 8, "batch": 4, "grad_accum": 8}
+  },
+  "test_sets": {
+    "original": {"mnlim": "data/nli/original_dataset/mnlim/test.json"},
+    "mr": {"mnlim": "data/nli/MR_testing/mnlim_test_MR"}
+  }
+}

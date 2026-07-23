@@ -402,19 +402,58 @@ def enforce_stage2_training_gate(config, exp, conversion_report, output_root=Non
                 "exploratory output root mismatch: "
                 f"expected={required_output_root!r} actual={actual_output_root!r}"
             )
+    ft_params = exp.get("ft_params") or {}
     max_training_steps = override.get("max_training_steps")
-    configured_steps = (exp.get("ft_params") or {}).get("max_steps")
-    if (
-        not isinstance(max_training_steps, int)
-        or max_training_steps < 1
-        or not isinstance(configured_steps, int)
-        or configured_steps < 1
-        or configured_steps > max_training_steps
-    ):
+    max_training_epochs = override.get("max_training_epochs")
+    configured_steps = ft_params.get("max_steps")
+    configured_epochs = ft_params.get("epochs")
+    if max_training_steps is not None and max_training_epochs is not None:
         override_failures.append(
-            "exploratory max_steps invalid: "
-            f"configured={configured_steps!r} limit={max_training_steps!r}"
+            "exploratory override must configure exactly one training budget"
         )
+        budget_decision_fields = {}
+    elif max_training_steps is not None:
+        if (
+            not isinstance(max_training_steps, int)
+            or isinstance(max_training_steps, bool)
+            or max_training_steps < 1
+            or not isinstance(configured_steps, int)
+            or isinstance(configured_steps, bool)
+            or configured_steps < 1
+            or configured_steps > max_training_steps
+        ):
+            override_failures.append(
+                "exploratory max_steps invalid: "
+                f"configured={configured_steps!r} limit={max_training_steps!r}"
+            )
+        # Keep the original decision shape for existing smoke-run provenance.
+        budget_decision_fields = {"max_training_steps": configured_steps}
+    elif max_training_epochs is not None:
+        numeric_limit = (
+            isinstance(max_training_epochs, (int, float))
+            and not isinstance(max_training_epochs, bool)
+        )
+        numeric_epochs = (
+            isinstance(configured_epochs, (int, float))
+            and not isinstance(configured_epochs, bool)
+        )
+        if (
+            not numeric_limit
+            or max_training_epochs <= 0
+            or not numeric_epochs
+            or configured_epochs <= 0
+            or configured_epochs > max_training_epochs
+            or configured_steps is not None
+        ):
+            override_failures.append(
+                "exploratory epochs invalid: "
+                f"configured={configured_epochs!r} limit={max_training_epochs!r} "
+                f"max_steps={configured_steps!r}"
+            )
+        budget_decision_fields = {"max_training_epochs": configured_epochs}
+    else:
+        override_failures.append("exploratory training budget is not configured")
+        budget_decision_fields = {}
 
     evidence_value = override.get("evidence")
     evidence_path = resolve_workspace_path(evidence_value) if evidence_value else None
@@ -440,7 +479,7 @@ def enforce_stage2_training_gate(config, exp, conversion_report, output_root=Non
         "classification": "exploratory_pilot",
         "human_validation_status": "QUICK_AUDIT_ONLY_NOT_PASSED",
         "confirmatory_use_allowed": False,
-        "max_training_steps": configured_steps,
+        **budget_decision_fields,
         "output_root": required_output_root,
         "seed": exp.get("seed", 42),
         "mr_instruction_mode": mode,
@@ -544,6 +583,35 @@ def run_cmd(cmd, desc, dry_run=False, cwd=None, env=None):
     return True
 
 
+def find_latest_complete_checkpoint(model_dir):
+    """Return the newest resumable Trainer checkpoint, ignoring partial saves."""
+    candidates = []
+    if not model_dir.is_dir():
+        return None
+    required = (
+        "adapter_model.safetensors",
+        "optimizer.pt",
+        "scheduler.pt",
+        "rng_state.pth",
+        "trainer_state.json",
+    )
+    for path in model_dir.glob("checkpoint-*"):
+        try:
+            step = int(path.name.removeprefix("checkpoint-"))
+        except ValueError:
+            continue
+        if not path.is_dir() or any(not (path / name).is_file() for name in required):
+            continue
+        try:
+            state = json.loads((path / "trainer_state.json").read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if state.get("global_step") != step:
+            continue
+        candidates.append((step, path))
+    return max(candidates, default=(None, None))[1]
+
+
 def build_yaml(exp, model_name, template, output_root):
     """生成微调 YAML 配置内容"""
     p = exp.get("ft_params", {})
@@ -551,6 +619,13 @@ def build_yaml(exp, model_name, template, output_root):
         f"max_steps: {p['max_steps']}"
         if p.get("max_steps") is not None
         else f"num_train_epochs: {p.get('epochs', 3.0)}"
+    )
+    model_dir = output_root / exp["name"] / "model"
+    resume_checkpoint = find_latest_complete_checkpoint(model_dir)
+    resume_line = (
+        f"resume_from_checkpoint: {resume_checkpoint.as_posix()}\n"
+        if resume_checkpoint is not None
+        else ""
     )
     return f"""### LoRA Fine-tuning: {exp['name']}
 # Task type: {exp['task_type']}
@@ -579,8 +654,8 @@ eval_strategy: {exp.get('eval_strategy', 'no')}
 eval_steps: {exp.get('eval_steps', 50)}
 seed: {exp.get('seed', 42)}
 data_seed: {exp.get('seed', 42)}
-output_dir: {output_root / exp['name'] / 'model'}
-report_to: none
+output_dir: {model_dir}
+{resume_line}report_to: none
 bf16: true
 trust_remote_code: true
 remove_unused_columns: false
