@@ -18,7 +18,7 @@
 ### 2.1 当前系统化 LoRA 实验
 
 ```text
-experiments_config*.json
+experiments/configs/experiments_config*.json
         │
         ▼
 scripts/run_batch_experiments.py
@@ -76,7 +76,7 @@ output/<model>/<dataset>/<mr>.jsonl
 | `test_only_MR/` | MR 文件的单独副本 | 辅助/历史输入 |
 | `paper/` | LLMORPH、MetTrain 参考 PDF | 研究背景 |
 | `bare_jrnl_new_sample4.tex` | IEEEtran 格式论文主稿 | 当前论文源文件 |
-| `experiments_config.json` | 系统实验、模型、训练集和测试集路径 | 当前批量实验入口 |
+| `experiments/configs/experiments_config.json` | 系统实验、模型、训练集和测试集路径 | 当前批量实验入口 |
 | `ft_config*.yaml` | 单次 LLaMA Factory LoRA 配置样例 | 手动/兼容入口 |
 | `output/experiments/gemma3_4b_nli/result.md` | Gemma 逐种子结果与三种子统计 | Gemma 当前结果汇总 |
 | `scripts/summarize_seed_experiments.py` | 从逐行 `correct` 重算结果并可生成 Gemma/Llama 对比 | 可复现汇总入口 |
@@ -92,7 +92,7 @@ output/<model>/<dataset>/<mr>.jsonl
 
 当前最重要的总入口。职责包括：
 
-- 读取 `experiments_config.json`；
+- 读取 `experiments/configs/experiments_config.json`；
 - 将基础实验名扩展成 `<实验名>_seed<seed>`；
 - 在配置的 `output_root` 下读写 `_progress.json`，按阶段支持 `--resume`；
 - 为实验和 seed 组合建立目录及 `experiment_meta.json`；
@@ -109,19 +109,19 @@ output/<model>/<dataset>/<mr>.jsonl
 ```bash
 # 先检查将执行什么
 python scripts/run_batch_experiments.py \
-  --config experiments_config.json \
+  --config experiments/configs/experiments_config.json \
   --seeds 42 43 44 \
   --dry-run
 
 # 三种子断点续跑
 python scripts/run_batch_experiments.py \
-  --config experiments_config.json \
+  --config experiments/configs/experiments_config.json \
   --seeds 42 43 44 \
   --resume
 
 # 仅运行指定实验
 python scripts/run_batch_experiments.py \
-  --config experiments_config.json \
+  --config experiments/configs/experiments_config.json \
   --only mettrain_rte_2490_gemma3_4b original_rte_2490_gemma3_4b \
   --seeds 42 43 44
 ```
@@ -311,7 +311,7 @@ MRV 在当前代码中按数据集/MR 的错误率统计，用于观察不同变
 
 ### 5.3 当前实验配置
 
-`experiments_config.json` 的 Gemma 公共设置：
+`experiments/configs/experiments_config.json` 的 Gemma 公共设置：
 
 - base model：`google/gemma-3-4b-it`；
 - template：`gemma`；
@@ -335,7 +335,7 @@ MRV 在当前代码中按数据集/MR 的错误率统计，用于观察不同变
 
 Gemma 具体准确率见 `output/experiments/gemma3_4b_nli/RESULTS.md`；Llama 汇总见 `output/experiments/llama32_3b_nli/RESULTS.md`；两者同 seed 配对对比见 `output/experiments/llama32_3b_nli/COMPARISON_vs_Gemma.md`。
 
-`experiments_config_llama32_3b.json` 定义相同 7 组三分类实验和 seeds 42/43/44：
+`experiments/configs/experiments_config_llama32_3b.json` 定义相同 7 组三分类实验和 seeds 42/43/44：
 
 - 请求模型：`meta-llama/Llama-3.2-3B-Instruct`；实际来源：`unsloth/Llama-3.2-3B-Instruct` BF16 非量化镜像；
 - template：`llama3`；训练超参数和测试集与 Gemma 保持一致；
@@ -345,7 +345,7 @@ Gemma 具体准确率见 `output/experiments/gemma3_4b_nli/RESULTS.md`；Llama �
 
 ### 5.4 MR-as-Instruction Pilot Stage 2 / Exploratory Stage 3（2026-07-23）
 
-`experiments_config_mrinstr_pilot.json` 定义 MNLI 4413、seed 42 的六种 conversion mode：`none`、`operation_only`、`pair_only`、`pair_operation`、`shuffled_operation`、`full_oracle`。六种 mode 共享同一 sampled file 与 split manifest，均生成 train 4174 / validation 239。
+`experiments/configs/experiments_config_mrinstr_pilot.json` 定义 MNLI 4413、seed 42 的六种 conversion mode：`none`、`operation_only`、`pair_only`、`pair_operation`、`shuffled_operation`、`full_oracle`。六种 mode 共享同一 sampled file 与 split manifest，均生成 train 4174 / validation 239。
 
 `scripts/validate_mrinstr_conversion.py` 对 cohort 复用元数据、模板版本、行序、manifest/data signature、转换文件 SHA-256、validation generic instruction、pair/shuffled 对齐、shuffled confusion matrix 和实际 tokenizer 整体/by-MR 长度做自动验证。当前 125/125 自动检查通过。四类数据质量风险仍使 Stage 2 总体为 **FAIL**、原 training gate 为 **BLOCKED**，Human Validation 没有通过。
 
@@ -353,7 +353,7 @@ Gemma 具体准确率见 `output/experiments/gemma3_4b_nli/RESULTS.md`；Llama �
 
 三个核心模式已完成实际 20-step smoke，均成功执行 eval、保存 checkpoint/adapter，并记录 `global_step=20`。`none`、`pair_operation`、`shuffled_operation` 的 train/eval loss 分别为 1.2993/0.1170、0.9316/0.1133、0.9678/0.1332；这些数值只用于 pipeline health，不能作模式优劣结论。`none` adapter 在相同 8 条 MNLI Original 上的 batch 1/32 贪婪预测 8/8 一致，两份 JSONL 逐字节相同。迁移中发现并修复 dataset registry 远端绝对路径、Windows CRLF 转换哈希和 Transformers 5 `BatchEncoding` 单条推理兼容问题；修复后 Stage 2 自动检查恢复 125/125。旧失败现场保留，成功 smoke 报告见 ignored 的 `artifacts/mrinstr_validation/stage3_exploratory_smoke_report.{json,md}`。Stage 4 与任何确认性结论仍禁止。
 
-独立 full 配置 `experiments_config_mrinstr_exploratory_full_seed42.json` 进一步把同一三个 mode 限制为 seed 42、最多 3 epochs，并固定隔离输出根 `output/experiments/gemma3_4b_mrinstr_exploratory_full_seed42_v1/`。三组 393/393 steps 均已完成，最终 eval loss 为 `none=0.09847`、`pair_operation=0.16866`、`shuffled_operation=0.13062`。`none` 首次运行在 340 步后因外层监控超时中断，随后由 runner 从完整 `checkpoint-300` 恢复并完成；其 `train_results.json` 的 runtime/loss 只覆盖恢复段，不能与另外两组直接比较。三组均观察到中期 eval 优于最终 eval，但 `save_total_limit=2` 已滚动删除中期最佳 checkpoint，因此当前权威可用产物是最终 3-epoch adapter，不能事后把中期日志最佳值当作可加载模型。用户要求在此暂停：Stage 4 未启动；后续 GPU 训练/推理/评测转到远程服务器执行，本机继续负责源码、审计、结果分析和实验决策。GPU 执行交接见 `GPU_EXECUTION_HANDOFF.md`。
+独立 full 配置 `experiments/configs/experiments_config_mrinstr_exploratory_full_seed42.json` 进一步把同一三个 mode 限制为 seed 42、最多 3 epochs，并固定隔离输出根 `output/experiments/gemma3_4b_mrinstr_exploratory_full_seed42_v1/`。三组 393/393 steps 均已完成，最终 eval loss 为 `none=0.09847`、`pair_operation=0.16866`、`shuffled_operation=0.13062`。`none` 首次运行在 340 步后因外层监控超时中断，随后由 runner 从完整 `checkpoint-300` 恢复并完成；其 `train_results.json` 的 runtime/loss 只覆盖恢复段，不能与另外两组直接比较。三组均观察到中期 eval 优于最终 eval，但 `save_total_limit=2` 已滚动删除中期最佳 checkpoint，因此当前权威可用产物是最终 3-epoch adapter，不能事后把中期日志最佳值当作可加载模型。用户要求在此暂停：Stage 4 未启动；后续 GPU 训练/推理/评测转到远程服务器执行，本机继续负责源码、审计、结果分析和实验决策。GPU 执行交接见 `GPU_EXECUTION_HANDOFF.md`。
 
 `scripts/prepare_mrinstr_annotation.py` 将人工协议物化为可复现的双人独立复核批次。它从 cohort 和实际 Gemma tokenizer 重算 1114 条 blocker 的 stable sample key、完整 pair context、token 长度、来源签名和同 pair sibling context；为每位标注者独立打乱顺序，并按每 100 条唯一任务插入 5 条稳定性复测。当前 `artifacts/mrinstr_annotation/` 已生成 `annotation_batch_manifest.json` 与两份未填写 JSONL 模板：每份 1114 条唯一任务、1174 个展示项、12 个批次、60 条复测。生成器默认只校验已存在的完整批次，拒绝覆盖部分或已有标注文件；模板不代表人工审查已经完成。
 

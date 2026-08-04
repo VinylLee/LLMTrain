@@ -27,7 +27,7 @@ def test_pilot_yaml_has_eval_and_seeds(tmp_path):
     text = build_yaml(experiment(), "model", "gemma", tmp_path)
     assert f"dataset_dir: {(runner.WORK_DIR / 'data').as_posix()}" in text
     assert "eval_dataset: pilot_seed42_val" in text
-    assert "eval_strategy: steps" in text
+    assert "eval_strategy: \"steps\"" in text
     assert "seed: 42" in text and "data_seed: 42" in text
 
 

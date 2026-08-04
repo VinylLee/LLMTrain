@@ -2,42 +2,42 @@
 """
 批量实验编排器：采样 → 转换 → 微调 → 测试全自动流水线
 
-读取 experiments_config.json（或自定义配置文件），对其中定义的一个或多个
+读取 experiments/configs/experiments_config.json（或自定义配置文件），对其中定义的一个或多个
 训练数据集依次完成完整实验流程，并在原始 + MR 测试集上评估。
 
 用法:
   # 跑全部实验 × 3种子 = 24次
-  python scripts/run_batch_experiments.py --config experiments_config.json --seeds 42 43 44
+  python scripts/run_batch_experiments.py --config experiments/configs/experiments_config.json --seeds 42 43 44
 
   # 先只跑2个实验验证
-  python scripts/run_batch_experiments.py --config experiments_config.json --only mettrain_mnlim_4413_gemma3_4b
+  python scripts/run_batch_experiments.py --config experiments/configs/experiments_config.json --only mettrain_mnlim_4413_gemma3_4b
   original_snli_5340_gemma3_4b --seeds 42 43 44 --dry-run
 
   # 使用分层采样
-  python scripts/run_batch_experiments.py --config experiments_config.json --seeds 42 43 44 --stratify
+  python scripts/run_batch_experiments.py --config experiments/configs/experiments_config.json --seeds 42 43 44 --stratify
 
   # 跑全部实验
-  python scripts/run_batch_experiments.py --config experiments_config.json
+  python scripts/run_batch_experiments.py --config experiments/configs/experiments_config.json
 
   # 只跑原始数据实验
-  python scripts/run_batch_experiments.py --config experiments_config.json --only original_snli_5340_gemma3_4b
+  python scripts/run_batch_experiments.py --config experiments/configs/experiments_config.json --only original_snli_5340_gemma3_4b
   original_mnlim_4413_gemma3_4b original_sick_4439_gemma3_4b
 
   # 只跑 MetTrain 数据实验
-  python scripts/run_batch_experiments.py --config experiments_config.json --only mettrain_snli_5340_gemma3_4b
+  python scripts/run_batch_experiments.py --config experiments/configs/experiments_config.json --only mettrain_snli_5340_gemma3_4b
   mettrain_mnlim_4413_gemma3_4b mettrain_sick_4439_gemma3_4b
 
   # 指定部分实验
-  python scripts/run_batch_experiments.py --config experiments_config.json --only mettrain_mnlim_4413_gemma3_4b
+  python scripts/run_batch_experiments.py --config experiments/configs/experiments_config.json --only mettrain_mnlim_4413_gemma3_4b
 
   # 干跑（只看命令不执行）
-  python scripts/run_batch_experiments.py --config experiments_config.json --dry-run
+  python scripts/run_batch_experiments.py --config experiments/configs/experiments_config.json --dry-run
 
   # 断点续跑
-  python scripts/run_batch_experiments.py --config experiments_config.json --resume
+  python scripts/run_batch_experiments.py --config experiments/configs/experiments_config.json --resume
 
   # 覆盖模型
-  python scripts/run_batch_experiments.py --config experiments_config.json --model qwen
+  python scripts/run_batch_experiments.py --config experiments/configs/experiments_config.json --model qwen
 """
 import json
 import subprocess
@@ -650,7 +650,7 @@ logging_steps: 10
 save_steps: {exp.get('save_steps', 9999)}
 save_total_limit: {exp.get('save_total_limit', 2)}
 eval_dataset: {exp['name']}_val
-eval_strategy: {exp.get('eval_strategy', 'no')}
+eval_strategy: "{exp.get('eval_strategy', 'no')}"
 eval_steps: {exp.get('eval_steps', 50)}
 seed: {exp.get('seed', 42)}
 data_seed: {exp.get('seed', 42)}
@@ -889,7 +889,12 @@ def run_experiment(exp, config, output_root, progress_file, selected_steps,
     else:
         report_path = ft_data_dir / "conversion_report.json"
         manifest_path = cohort_dir / "split_manifest.json"
-        if not report_path.exists() or not manifest_path.exists():
+        _has_manifest = manifest_path.exists()
+        if not report_path.exists():
+            if dry_run:
+                raise RuntimeError("训练 dry-run 前仍需现有 conversion report")
+            raise RuntimeError("训练前缺少 conversion report")
+        if cohort_id and not _has_manifest:
             if dry_run:
                 raise RuntimeError("训练 dry-run 前仍需现有 conversion report 和 split manifest")
             raise RuntimeError("训练前缺少 conversion report 或 split manifest")

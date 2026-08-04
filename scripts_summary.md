@@ -32,7 +32,7 @@
 ## 1. `run_batch_experiments.py`
 
 ### 代码逻辑
-- 读取 `experiments_config.json` 或指定配置。
+- 读取 `experiments/configs/experiments_config.json` 或指定配置。
 - 将实验名与 seed 组合成 `name_seedX`。
 - 按阶段执行采样、转换、微调、Original 测试、MR 测试。
 - 维护 `_progress.json` 作为断点续跑状态。

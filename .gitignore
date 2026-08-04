@@ -18,6 +18,8 @@ build/
 # --- Data (test datasets are large, download from source) ---
 data/
 /data/
+.backup/
+/.backup/
 
 # --- Output (API predictions, evaluation reports) ---
 output/

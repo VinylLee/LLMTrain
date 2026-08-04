@@ -49,7 +49,17 @@
     "ft_params": {"lr": 0.0003, "epochs": 3.0, "rank": 8, "batch": 4, "grad_accum": 8}
   },
   "test_sets": {
-    "original": {"mnlim": "data/nli/original_dataset/mnlim/test.json"},
-    "mr": {"mnlim": "data/nli/MR_testing/mnlim_test_MR"}
+    "original": {
+      "snli": "data/nli/original_dataset/snli/test.json",
+      "mnlim": "data/nli/original_dataset/mnlim/test.json",
+      "mnlimm": "data/nli/original_dataset/mnlimm/test.json",
+      "sick": "data/nli/original_dataset/sick/test.json"
+    },
+    "mr": {
+      "snli": "data/nli/MR_testing/snli_test_MR",
+      "mnlim": "data/nli/MR_testing/mnlim_test_MR",
+      "mnlimm": "data/nli/MR_testing/mnlimm_test_MR",
+      "sick": "data/nli/MR_testing/sick_test_MR"
+    }
   }
 }

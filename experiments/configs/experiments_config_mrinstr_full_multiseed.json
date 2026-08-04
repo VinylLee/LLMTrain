@@ -1,0 +1,59 @@
+{
+  "model": "google/gemma-3-4b-it",
+  "tokenizer": "google/gemma-3-4b-it",
+  "local_model_path": "models/google/gemma-3-4b-it",
+  "local_tokenizer_path": "models/google/gemma-3-4b-it",
+  "template": "gemma",
+  "template_version": 1,
+  "instruction_template_version": 2,
+  "cuda": "0",
+  "output_root": "output/experiments/gemma3_4b_mrinstr_full_multiseed_v1",
+  "generation": {"do_sample": false, "max_new_tokens": 10},
+  "research_status": {
+    "classification": "exploratory_pilot",
+    "phase": "full_multiseed",
+    "human_validation_status": "QUICK_AUDIT_ONLY_NOT_PASSED",
+    "confirmatory_use_allowed": false,
+    "reporting_label": "EXPLORATORY FULL MULTI-SEED — Human Validation not passed"
+  },
+  "stage2_gate": {
+    "required": false,
+    "report": "artifacts/mrinstr_validation/stage2_report.json"
+  },
+  "experiments": [
+    {"name": "mettrain_mnlim_4413_gemma3_4b_mrpilot_none", "mr_instruction_mode": "none"},
+    {"name": "mettrain_mnlim_4413_gemma3_4b_mrpilot_mrop", "mr_instruction_mode": "operation_only"},
+    {"name": "mettrain_mnlim_4413_gemma3_4b_mrpilot_paironly", "mr_instruction_mode": "pair_only"},
+    {"name": "mettrain_mnlim_4413_gemma3_4b_mrpilot_pairop", "mr_instruction_mode": "pair_operation"},
+    {"name": "mettrain_mnlim_4413_gemma3_4b_mrpilot_shuffled", "mr_instruction_mode": "shuffled_operation"},
+    {"name": "mettrain_mnlim_4413_gemma3_4b_mrpilot_fulloracle", "mr_instruction_mode": "full_oracle"}
+  ],
+  "experiment_defaults": {
+    "train_data": "data/nli/mettrain/mnlim_lr0.0051_gemma-3-4b-it-qat/augmented_data.json",
+    "target": 4413,
+    "task_type": "nli",
+    "cohort_id": "mettrain_mnlim_4413_gemma3_4b_mrpilot_v1",
+    "strict_pairing": true,
+    "val_ratio": 0.05,
+    "cutoff_len": 512,
+    "eval_strategy": "steps",
+    "eval_steps": 50,
+    "save_steps": 50,
+    "save_total_limit": 2,
+    "ft_params": {"lr": 0.0003, "epochs": 3.0, "rank": 8, "batch": 4, "grad_accum": 8}
+  },
+  "test_sets": {
+    "original": {
+      "snli": "data/nli/original_dataset/snli/test.json",
+      "mnlim": "data/nli/original_dataset/mnlim/test.json",
+      "mnlimm": "data/nli/original_dataset/mnlimm/test.json",
+      "sick": "data/nli/original_dataset/sick/test.json"
+    },
+    "mr": {
+      "snli": "data/nli/MR_testing/snli_test_MR",
+      "mnlim": "data/nli/MR_testing/mnlim_test_MR",
+      "mnlimm": "data/nli/MR_testing/mnlimm_test_MR",
+      "sick": "data/nli/MR_testing/sick_test_MR"
+    }
+  }
+}

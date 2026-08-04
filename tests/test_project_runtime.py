@@ -12,7 +12,7 @@ from project_runtime import PROJECT_ROOT, build_subprocess_env, resolve_model_re
 
 def test_project_root_is_derived_from_script_location():
     assert PROJECT_ROOT == ROOT
-    assert (PROJECT_ROOT / "experiments_config.json").is_file()
+    assert (PROJECT_ROOT / "experiments" / "configs" / "experiments_config.json").is_file()
 
 
 def test_subprocess_environment_is_cross_platform():
@@ -40,7 +40,7 @@ def test_active_configs_use_cuda_zero():
         "experiments_config_llama32_3b.json",
         "experiments_config_mrinstr_pilot.json",
     ):
-        config = json.loads((ROOT / name).read_text(encoding="utf-8"))
+        config = json.loads((ROOT / "experiments" / "configs" / name).read_text(encoding="utf-8"))
         assert config["cuda"] == "0"
 
 
