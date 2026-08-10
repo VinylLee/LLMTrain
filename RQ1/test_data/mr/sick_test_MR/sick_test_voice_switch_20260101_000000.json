@@ -1,0 +1,5 @@
+{"premise": "A man is playing guitar on stage.", "hypothesis": "Music is being performed by a person.", "label": 0, "mr_type": "voice_switch", "mr_category": "inv"}
+{"premise": "Two dogs are running in the park.", "hypothesis": "The park has dogs running in it.", "label": 0, "mr_type": "voice_switch", "mr_category": "inv"}
+{"premise": "The woman is reading a book.", "hypothesis": "A book is being read by the woman.", "label": 1, "mr_type": "voice_switch", "mr_category": "inv"}
+{"premise": "A child is eating an apple.", "hypothesis": "Any food is being refused by the child.", "label": 2, "mr_type": "voice_switch", "mr_category": "inv"}
+{"premise": "She poured water into the glass.", "hypothesis": "A container received liquid from her.", "label": 0, "mr_type": "voice_switch", "mr_category": "inv"}

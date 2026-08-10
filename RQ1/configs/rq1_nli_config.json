@@ -1,0 +1,107 @@
+{
+  "_schema_version": 1,
+  "_description": "RQ1 NLI model registry — maps each model to training data paths and defaults. Test sets are shared.",
+
+  "models": {
+    "gemma-3-4b-it": {
+      "hub_id": "google/gemma-3-4b-it",
+      "local_path": "models/google/gemma-3-4b-it",
+      "local_tokenizer_path": "models/google/gemma-3-4b-it",
+      "template": "gemma",
+      "cuda": "0",
+      "training_data": {
+        "snli": {
+          "original": "data/nli/original_dataset/snli/train.json",
+          "mr": "data/nli/mettrain/snli_lr0.0037_gemma-3-4b-it-qat/augmented_data.json",
+          "target": 5340
+        },
+        "mnlim": {
+          "original": "data/nli/original_dataset/mnlim/train.json",
+          "mr": "data/nli/mettrain/mnlim_lr0.0051_gemma-3-4b-it-qat/augmented_data.json",
+          "target": 4413
+        },
+        "mnlimm": {
+          "original": "data/nli/original_dataset/mnlimm/train.json",
+          "mr": "data/nli/mettrain/mnlimm_lr0.0051_gemma-3-4b-it-qat/augmented_data.json",
+          "target": 4413
+        },
+        "sick": {
+          "original": "data/nli/original_dataset/sick/train.json",
+          "mr": "data/nli/mettrain/sick_lr1.0_gemma-3-4b-it-qat/augmented_data.json",
+          "target": 4439,
+          "_note": "全量 sick MR 数据为 11176 条；默认 target=4439 匹配 original 大小以实现公平比较。使用 --target 11176 可用全部 MR 数据。"
+        }
+      }
+    },
+
+    "llama-3.2-3b": {
+      "hub_id": "unsloth/Llama-3.2-3B-Instruct",
+      "local_path": null,
+      "local_tokenizer_path": null,
+      "template": "llama3",
+      "cuda": "0",
+      "model_source_note": "BF16 非量化镜像",
+      "training_data": {
+        "snli": {
+          "original": "data/nli/original_dataset/snli/train.json",
+          "mr": "data/nli/mettrain/snli_lr0.0037_llama-3.2-3b-instruct/augmented_data.json",
+          "target": 4149
+        },
+        "mnlim": {
+          "original": "data/nli/original_dataset/mnlim/train.json",
+          "mr": "data/nli/mettrain/mnlim_lr0.0051_llama-3.2-3b-instruct/augmented_data.json",
+          "target": 3969
+        },
+        "mnlimm": {
+          "original": "data/nli/original_dataset/mnlimm/train.json",
+          "mr": "data/nli/mettrain/mnlimm_lr0.0051_llama-3.2-3b-instruct/augmented_data.json",
+          "target": 3993
+        },
+        "sick": {
+          "original": "data/nli/original_dataset/sick/train.json",
+          "mr": "data/nli/mettrain/sick_lr1.0_llama-3.2-3b-instruct/augmented_data.json",
+          "target": 4439,
+          "_note": "全量 sick MR 数据为 8669 条；默认 target=4439 匹配 original 大小。"
+        }
+      }
+    }
+  },
+
+  "test_sets": {
+    "original": {
+      "snli": "data/nli/original_dataset/snli/test.json",
+      "mnlim": "data/nli/original_dataset/mnlim/test.json",
+      "mnlimm": "data/nli/original_dataset/mnlimm/test.json",
+      "sick": "data/nli/original_dataset/sick/test.json"
+    },
+    "mr": {
+      "snli": "data/nli/MR_testing/snli_test_MR",
+      "mnlim": "data/nli/MR_testing/mnlim_test_MR",
+      "mnlimm": "data/nli/MR_testing/mnlimm_test_MR",
+      "sick": "data/nli/MR_testing/sick_test_MR"
+    }
+  },
+
+  "experiment_defaults": {
+    "ft_params": {
+      "lr": 0.0003,
+      "epochs": 3.0,
+      "rank": 8,
+      "batch": 4,
+      "grad_accum": 8
+    },
+    "task_type": "nli",
+    "val_ratio": 0.05,
+    "cutoff_len": 512,
+    "eval_strategy": "no",
+    "save_steps": 9999,
+    "save_total_limit": 2,
+    "test_batch_size": 32,
+    "max_new_tokens": 10
+  },
+
+  "default_seeds": [42, 43, 44],
+  "default_train_datasets": ["snli", "mnlim", "sick"],
+  "default_experiment_types": ["original", "mr"],
+  "default_mr_instruction_mode": "pair_operation"
+}

@@ -1,0 +1,19 @@
+{
+  "dataset": "sick",
+  "split": "test",
+  "timestamp": "20260101_000000",
+  "total_mrs": 2,
+  "save_format": "transformed_only",
+  "mr_statistics": {
+    "synonym_replacement": {
+      "count": 5,
+      "category": "inv"
+    },
+    "voice_switch": {
+      "count": 5,
+      "category": "inv"
+    }
+  },
+  "total_test_cases": 10,
+  "format_note": "0=entailment, 1=neutral, 2=contradiction"
+}

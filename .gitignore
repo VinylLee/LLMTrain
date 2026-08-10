@@ -33,6 +33,12 @@ backup_output/
 # --- Test cache ---
 .pytest_cache/
 
+# --- Experiment temp files ---
+ft_config_*.yaml
+
+# --- RQ1 experiment output (models and results are large) ---
+RQ1/output/
+
 # --- Claude Code ---
 .claude/
 

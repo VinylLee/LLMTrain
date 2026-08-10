@@ -1,0 +1,59 @@
+{
+  "_schema_version": 1,
+  "_description": "Smoke-test config for RQ1 NLI pipeline — uses minimal test data under RQ1/test_data/. No GPU needed for sample/convert; finetune requires LLaMA-Factory + GPU.",
+
+  "models": {
+    "gemma-3-4b-it": {
+      "hub_id": "google/gemma-3-4b-it",
+      "local_path": "models/google/gemma-3-4b-it",
+      "local_tokenizer_path": "models/google/gemma-3-4b-it",
+      "template": "gemma",
+      "cuda": "0",
+      "training_data": {
+        "sick": {
+          "original": "RQ1/test_data/original/sick/train.json",
+          "mr": "RQ1/test_data/mr/sick_train.json",
+          "target": 20
+        }
+      }
+    }
+  },
+
+  "test_sets": {
+    "original": {
+      "snli": "RQ1/test_data/original/snli/test.json",
+      "mnlim": "RQ1/test_data/original/mnlim/test.json",
+      "mnlimm": "RQ1/test_data/original/mnlimm/test.json",
+      "sick": "RQ1/test_data/original/sick/test.json"
+    },
+    "mr": {
+      "snli": "RQ1/test_data/mr/snli_test_MR",
+      "mnlim": "RQ1/test_data/mr/mnlim_test_MR",
+      "mnlimm": "RQ1/test_data/mr/mnlimm_test_MR",
+      "sick": "RQ1/test_data/mr/sick_test_MR"
+    }
+  },
+
+  "experiment_defaults": {
+    "ft_params": {
+      "lr": 0.0003,
+      "epochs": 1.0,
+      "rank": 4,
+      "batch": 2,
+      "grad_accum": 2
+    },
+    "task_type": "nli",
+    "val_ratio": 0.2,
+    "cutoff_len": 256,
+    "eval_strategy": "no",
+    "save_steps": 9999,
+    "save_total_limit": 1,
+    "test_batch_size": 4,
+    "max_new_tokens": 10
+  },
+
+  "default_seeds": [42],
+  "default_train_datasets": ["sick"],
+  "default_experiment_types": ["original", "mr"],
+  "default_mr_instruction_mode": "pair_operation"
+}

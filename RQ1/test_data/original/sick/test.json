@@ -1,0 +1,5 @@
+{"premise": "A man is playing guitar on stage.", "hypothesis": "A person is performing music.", "label": 0, "idx": 0}
+{"premise": "Two dogs are running in the park.", "hypothesis": "Animals are outside.", "label": 0, "idx": 1}
+{"premise": "A man is playing guitar on stage.", "hypothesis": "The concert is sold out.", "label": 1, "idx": 2}
+{"premise": "Two dogs are running in the park.", "hypothesis": "It is raining heavily.", "label": 1, "idx": 3}
+{"premise": "A man is playing guitar on stage.", "hypothesis": "Nobody is performing any music.", "label": 2, "idx": 4}

@@ -1,0 +1,5 @@
+{"premise": "A man is playing guitar on stage.", "hypothesis": "An individual is presenting music.", "label": 0, "mr_type": "synonym_replacement", "mr_category": "inv"}
+{"premise": "Two dogs are running in the park.", "hypothesis": "Creatures are outdoors.", "label": 0, "mr_type": "synonym_replacement", "mr_category": "inv"}
+{"premise": "The woman is reading a book.", "hypothesis": "The female is engaged in reading activity.", "label": 1, "mr_type": "synonym_replacement", "mr_category": "inv"}
+{"premise": "A child is eating an apple.", "hypothesis": "The kid refuses to consume any food.", "label": 2, "mr_type": "synonym_replacement", "mr_category": "inv"}
+{"premise": "She poured water into the glass.", "hypothesis": "Fluid was moved into a receptacle.", "label": 0, "mr_type": "synonym_replacement", "mr_category": "inv"}

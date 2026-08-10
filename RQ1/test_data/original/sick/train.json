@@ -1,0 +1,24 @@
+{"premise": "A man is playing guitar on stage.", "hypothesis": "A person is performing music.", "label": 0, "idx": 0}
+{"premise": "Two dogs are running in the park.", "hypothesis": "Animals are outside.", "label": 0, "idx": 1}
+{"premise": "The woman is reading a book.", "hypothesis": "Someone is engaged in reading.", "label": 0, "idx": 2}
+{"premise": "A child is eating an apple.", "hypothesis": "A kid is consuming food.", "label": 0, "idx": 3}
+{"premise": "The car is driving down the road.", "hypothesis": "A vehicle is in motion.", "label": 0, "idx": 4}
+{"premise": "She poured water into the glass.", "hypothesis": "Liquid was transferred to a container.", "label": 0, "idx": 5}
+{"premise": "The cat is sleeping on the couch.", "hypothesis": "A pet is resting on furniture.", "label": 0, "idx": 6}
+{"premise": "He finished the marathon in three hours.", "hypothesis": "Someone completed a race.", "label": 0, "idx": 7}
+{"premise": "A man is playing guitar on stage.", "hypothesis": "The concert is sold out.", "label": 1, "idx": 8}
+{"premise": "Two dogs are running in the park.", "hypothesis": "It is raining heavily.", "label": 1, "idx": 9}
+{"premise": "The woman is reading a book.", "hypothesis": "The library closed early today.", "label": 1, "idx": 10}
+{"premise": "A child is eating an apple.", "hypothesis": "Apples are a popular fruit.", "label": 1, "idx": 11}
+{"premise": "The car is driving down the road.", "hypothesis": "The driver forgot to buy gas.", "label": 1, "idx": 12}
+{"premise": "She poured water into the glass.", "hypothesis": "The glass was made in Italy.", "label": 1, "idx": 13}
+{"premise": "The cat is sleeping on the couch.", "hypothesis": "Cats are independent animals.", "label": 1, "idx": 14}
+{"premise": "He finished the marathon in three hours.", "hypothesis": "The weather was sunny all day.", "label": 1, "idx": 15}
+{"premise": "A man is playing guitar on stage.", "hypothesis": "Nobody is performing any music.", "label": 2, "idx": 16}
+{"premise": "Two dogs are running in the park.", "hypothesis": "There are no animals outside.", "label": 2, "idx": 17}
+{"premise": "The woman is reading a book.", "hypothesis": "The woman is not engaged in any reading.", "label": 2, "idx": 18}
+{"premise": "A child is eating an apple.", "hypothesis": "The child is refusing to eat anything.", "label": 2, "idx": 19}
+{"premise": "The car is driving down the road.", "hypothesis": "The vehicle is parked and stationary.", "label": 2, "idx": 20}
+{"premise": "She poured water into the glass.", "hypothesis": "The glass remains completely empty.", "label": 2, "idx": 21}
+{"premise": "The cat is sleeping on the couch.", "hypothesis": "No pet is anywhere near the furniture.", "label": 2, "idx": 22}
+{"premise": "He finished the marathon in three hours.", "hypothesis": "He did not complete the race at all.", "label": 2, "idx": 23}
