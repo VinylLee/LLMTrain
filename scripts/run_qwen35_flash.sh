@@ -44,7 +44,7 @@ for ds_dir in "${DATASETS[@]}"; do
   total_lines=$(cat "$full_path"/*.json 2>/dev/null | wc -l)
   echo ">>> [predict] $ds_name ($count files, ~$total_lines lines)"
 
-  conda run -n LLMTrain3.9 \
+  conda run -n llmtrain310 \
     python3 scripts/test_llm.py \
       --data-dir "$full_path" \
       --output-dir "$OUTPUT_DIR" \
@@ -78,7 +78,7 @@ for ds_dir in "${DATASETS[@]}"; do
   fi
 
   if [ -s "$combined" ]; then
-    conda run -n LLMTrain3.9 \
+    conda run -n llmtrain310 \
       python3 scripts/evaluate.py "$combined" \
         --report "$ds_output_dir/${ds_name}_report.txt" \
         2>&1 | tail -3
@@ -92,7 +92,7 @@ combined_all="$OUTPUT_DIR/$SAFE_LLM/all_combined.jsonl"
 cat "$OUTPUT_DIR/$SAFE_LLM"/*/*_all.jsonl 2>/dev/null > "$combined_all" || true
 
 if [ -s "$combined_all" ]; then
-  conda run -n LLMTrain3.9 \
+  conda run -n llmtrain310 \
     python3 scripts/evaluate.py "$combined_all" \
       --report "$OUTPUT_DIR/$SAFE_LLM/all_report.txt" \
       --group-by _source mr_type \

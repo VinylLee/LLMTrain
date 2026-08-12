@@ -14,6 +14,12 @@
           "original": "RQ1/test_data/original/sick/train.json",
           "mr": "RQ1/test_data/mr/sick_train.json",
           "target": 20
+        },
+        "mnlim": {
+          "original": "RQ1/test_data/original/sick/train.json",
+          "mr": "RQ1/test_data/mr/sick_train.json",
+          "zaug": "RQ1/test_data/mr/zaug_train_s{seed}.jsonl",
+          "target": 16
         }
       }
     }
@@ -53,7 +59,8 @@
   },
 
   "default_seeds": [42],
-  "default_train_datasets": ["sick"],
-  "default_experiment_types": ["original", "mr"],
-  "default_mr_instruction_mode": "pair_operation"
+  "default_train_datasets": ["sick", "mnlim"],
+  "default_experiment_types": ["original", "mr", "zaug"],
+  "default_mr_instruction_mode": "none",
+  "default_test_mode": "merged"
 }

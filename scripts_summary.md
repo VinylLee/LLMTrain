@@ -157,15 +157,19 @@
 - 遍历数据目录中的 JSON/JSONL 文件。
 - 识别 NLI 三分类和 RTE 二分类任务。
 - 构造 prompt，调用 OpenAI 兼容接口。
-- 保存逐条预测、原始响应、元信息和任务类型。
+- `parse_dataset_mr()` 返回 `(dataset, mr_type, test_type)`，`test_type` ∈ `original`/`mr`/`skip`。
+- 跳过 `*_summary_*` 元数据文件；`--test-type` 指定时按数据集过滤（排除 rte、train/validation）。
+- 每条记录（逐用例）就地解析出 `pred`/`correct`，并带 `gold/mr_type/mr_category/idx/status/response` 等字段。
 
 ### 输入输出
-- 输入：数据目录、模型名、API URL/key 环境变量名、输出目录、运行 ID、请求延迟。
-- 输出：`output/<run_id>/<llm>/<dataset>/<mr>.jsonl`。
+- 输入：数据目录、模型名（`--llm`）、API 模型 id（`--api-model`，默认=`--llm`）、API URL/key 环境变量名、输出目录、请求延迟。
+- `--test-type original|mr` → 输出 `output/<llm>/<OFFICIAL_DATASET>/<test_type>/…`（逐用例 JSONL，如 `…/SNLI/original/SNLI_original.jsonl`、`…/SNLI/MR/negation_flip.jsonl`）。
+- `--test-type auto`（默认）→ 输出 `output/[<run-id>/]<llm>/<dataset>/<mr>.jsonl`（旧扁平布局，兼容旧 wrapper）。
+- 支持 `--datasets`、`--max-samples`、`--dry-run`。
 
 ### 调用关系
 - 被 `run_all.sh`、`run_qwen35_flash.sh` 和 `run_lmstudio_qwen.sh` 等包装脚本调用。
-- 与 `evaluate.py`、`mrv.py`、`mrv_excel.py` 配套使用。
+- 实验布局下与 `organize_nli_experiment.py` 配套；也可与 `evaluate.py`、`mrv.py` 配合评估旧布局输出。
 
 ### 潜在问题
 - 数据集识别依赖路径约定，文件命名变化会影响输出归档。
@@ -191,22 +195,38 @@
 ## 9. `run_all.sh`
 
 ### 代码逻辑
-- 遍历指定任务目录下的所有 `*_MR` 数据集。
-- 先调用 `test_llm.py` 逐文件推理。
-- 再把单数据集结果合并后调用 `evaluate.py`。
-- 最后再合并所有数据集并生成总报告。
+- 实验入口：先跑 Original 测试（`data/nli/original_dataset`），再跑 MR 测试（`data/nli/MR_testing`）。
+- 两次都调用 `test_llm.py --test-type original|mr`，按数据集（`--datasets`，默认 snli,mnlim,mnlimm,sick）与每文件样本上限（`--max-samples`）过滤。
+- 最后调用 `organize_nli_experiment.py` 生成逐用例数据、MR 合并文件与 `SUMMARY.md`。
 
 ### 输入输出
-- 输入：模型名、延迟、输出目录、任务目录、API 环境变量名。
-- 输出：`output/<llm>/<dataset>/`、`all_combined.jsonl`、`all_report.txt`、每个数据集的报告。
+- 输入：模型名（`--llm`）、API 模型 id（`--api-model`）、延迟、输出目录、数据集子集、每文件样本上限。
+- 输出：`output/<llm>/<OFFICIAL_DATASET>/original/<DS>_original.jsonl`、`…/MR/<mr>.jsonl`、`…/MR/<DS>_MR_all.jsonl`、`output/<llm>/SUMMARY.md`。
 
 ### 调用关系
-- 调用 `test_llm.py` 和 `evaluate.py`。
+- 调用 `test_llm.py` 和 `organize_nli_experiment.py`。
 
 ### 潜在问题
-- 依赖 `conda run -n LLMTrain3.9`，环境名固定。
-- 用 `sort` 合并 JSONL 时依赖输出格式稳定。
-- 对目录结构和文件命名依赖较强。
+- 依赖 `conda run -n llmtrain310`，环境名固定。
+- 对 `data/nli/original_dataset` 与 `data/nli/MR_testing` 的目录结构依赖较强。
+
+## 9.1 `organize_nli_experiment.py`
+
+### 代码逻辑
+- 遍历 `output/<llm>/<OFFICIAL_DATASET>/{original,MR}/` 下的逐用例 JSONL。
+- 规范化每条用例：缺失的 `pred`/`correct` 从原始 response 回填（保证逐用例精确）。
+- 把各 MR 文件合并成 `<DS>_MR_all.jsonl`（每条新增 `uid` 保证全局唯一）。
+- 生成 `output/<llm>/SUMMARY.md`：逐数据集×测试类型准确率 + 逐 MR 细分 + HTTP≠200/解析失败统计。
+
+### 输入输出
+- 输入：模型名（`--model`）、输出目录、数据集子集。
+- 输出：规范化后的逐用例 JSONL、`<DS>_MR_all.jsonl`、`SUMMARY.md`。
+
+### 调用关系
+- 由 `run_all.sh` 在两次测试后调用；幂等，可重复运行。
+
+### 潜在问题
+- 复用 `test_llm.py` 的预测解析函数（importlib 加载），两者口径保持一致。
 
 ## 10. `evaluate.py`
 

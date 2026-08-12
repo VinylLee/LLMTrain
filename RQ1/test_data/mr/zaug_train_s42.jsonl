@@ -1,0 +1,16 @@
+{"premise": "A man is playing guitar on stage.", "hypothesis": "A person is performing music.", "label": 0, "type": "original"}
+{"premise": "A man is playing guitar on stage.", "hypothesis": "The performer is entertaining the audience with a musical instrument.", "label": 0, "type": "generated"}
+{"premise": "Two dogs are running in the park.", "hypothesis": "Animals are outside.", "label": 0, "type": "original"}
+{"premise": "Two dogs are running in the park.", "hypothesis": "Canines are exercising in an outdoor space.", "label": 0, "type": "generated"}
+{"premise": "The woman is reading a book.", "hypothesis": "The library closed early today.", "label": 1, "type": "original"}
+{"premise": "The woman is reading a book.", "hypothesis": "The female is engaged in literary activity.", "label": 1, "type": "generated"}
+{"premise": "A child is eating an apple.", "hypothesis": "The child is refusing to eat anything.", "label": 2, "type": "original"}
+{"premise": "A child is eating an apple.", "hypothesis": "A youngster is consuming fruit.", "label": 2, "type": "generated"}
+{"premise": "She poured water into the glass.", "hypothesis": "Liquid was transferred to a container.", "label": 0, "type": "original"}
+{"premise": "She poured water into the glass.", "hypothesis": "She filled the cup with a beverage.", "label": 0, "type": "generated"}
+{"premise": "The car is driving down the road.", "hypothesis": "A vehicle is in motion.", "label": 0, "type": "original"}
+{"premise": "The car is driving down the road.", "hypothesis": "The automobile is traveling along the highway.", "label": 0, "type": "generated"}
+{"premise": "He finished the marathon in three hours.", "hypothesis": "The weather was sunny all day.", "label": 1, "type": "original"}
+{"premise": "He finished the marathon in three hours.", "hypothesis": "He completed the race in 180 minutes.", "label": 1, "type": "generated"}
+{"premise": "The cat is sleeping on the couch.", "hypothesis": "No pet is anywhere near the furniture.", "label": 2, "type": "original"}
+{"premise": "The cat is sleeping on the couch.", "hypothesis": "The feline is resting on the sofa.", "label": 2, "type": "generated"}

@@ -3,7 +3,8 @@
 测试微调后的 LoRA 模型：
   - Original 数据集
   - MR 数据集（聚合所有 MR 类型）
-保存 JSONL 结果到 output/experiments/<name>/tests/{original,mr}/
+  - Merged 数据集（source + MR 混合，通过 is_source 区分）
+保存 JSONL 结果到 output/experiments/<name>/tests/{original,mr,merged}/
 """
 __test__ = False
 import json, os, sys, time, torch, logging
@@ -36,6 +37,14 @@ MR_DATASETS = {
     "mnlim":  {"dir": "MR_testing/mnlim_test_MR",  "task": "3class", "labels": {0:"entailment", 1:"neutral", 2:"contradiction"}},
     "mnlimm": {"dir": "MR_testing/mnlimm_test_MR", "task": "3class", "labels": {0:"entailment", 1:"neutral", 2:"contradiction"}},
     "sick":   {"dir": "MR_testing/sick_test_MR",   "task": "3class", "labels": {0:"entailment", 1:"neutral", 2:"contradiction"}},
+}
+
+# Merged 测试数据集配置（source + MR 混合，通过 is_source 字段区分）
+MERGED_DATASETS = {
+    "snli":   "mr_test_data_merged/snli.jsonl",
+    "mnlim":  "mr_test_data_merged/mnlim.jsonl",
+    "mnlimm": "mr_test_data_merged/mnlimm.jsonl",
+    "sick":   "mr_test_data_merged/sick.jsonl",
 }
 
 BINARY_PROMPT = "Determine whether the premise entails the hypothesis. Answer with exactly one label: entailment or not_entailment.\n\nPremise: {premise}\nHypothesis: {hypothesis}"
@@ -217,19 +226,37 @@ def test_dataset(model, tokenizer, samples, ds_name, dataset_task, labels,
             is_correct = (pred == gold.lower())
 
             # 构建带丰富元数据的结果
-            result_entry = {
-                "index": total + 1,
-                "dataset": ds_name,
-                "test_type": test_type,
-                "premise": d.get("premise", ""),
-                "hypothesis": d.get("hypothesis", ""),
-                "gold": gold,
-                "pred": pred,
-                "correct": is_correct,
-            }
-
-            # MR 相关元数据
-            if test_type == "mr":
+            if test_type == "merged":
+                # Merged 模式：记录全部输入字段 + 预测字段
+                result_entry = {
+                    # 输入字段（完整保留）
+                    "idx": d.get("idx", ""),
+                    "premise": d.get("premise", ""),
+                    "hypothesis": d.get("hypothesis", ""),
+                    "mr_id": d.get("mr_id", ""),
+                    "pair_id": d.get("pair_id", ""),
+                    "label": d.get("label", -1),
+                    "mr_type": d.get("mr_type", ""),
+                    "is_source": d.get("is_source", False),
+                    # 预测字段
+                    "pred": pred,
+                    "gold": gold,
+                    "correct": is_correct,
+                    # 元数据
+                    "dataset": ds_name,
+                    "test_type": "merged",
+                }
+            elif test_type == "mr":
+                result_entry = {
+                    "index": total + 1,
+                    "dataset": ds_name,
+                    "test_type": test_type,
+                    "premise": d.get("premise", ""),
+                    "hypothesis": d.get("hypothesis", ""),
+                    "gold": gold,
+                    "pred": pred,
+                    "correct": is_correct,
+                }
                 sample_idx = start + j
                 # 优先使用数据中自带的 mr_type 字段（更干净），fallback 到文件名派生
                 data_mr_type = d.get("mr_type", "")
@@ -240,6 +267,16 @@ def test_dataset(model, tokenizer, samples, ds_name, dataset_task, labels,
                 result_entry["pair_id"] = d.get("pair_id", "")
                 result_entry["mr_category"] = d.get("mr_category", "")
             else:
+                result_entry = {
+                    "index": total + 1,
+                    "dataset": ds_name,
+                    "test_type": test_type,
+                    "premise": d.get("premise", ""),
+                    "hypothesis": d.get("hypothesis", ""),
+                    "gold": gold,
+                    "pred": pred,
+                    "correct": is_correct,
+                }
                 result_entry["pair_id"] = d.get("pair_id", "")
                 result_entry["idx"] = d.get("idx", d.get("index", ""))
 
@@ -284,6 +321,88 @@ def collect_mr_samples(mr_dir):
     return all_samples, mr_types
 
 
+def compute_msr(results):
+    """计算 Metamorphic Satisfaction Rate (MSR)。
+
+    基于 pair_id 分组 source 和 follow-up 预测，逐对检查 MR 输出关系是否满足。
+
+    Args:
+        results: list[dict], test_dataset() 返回的逐条结果（含 pred/gold/mr_type/is_source/pair_id）。
+
+    Returns:
+        dict: {
+            "overall": {"satisfied": int, "total": int, "rate": float},
+            "per_type": {"inv": {...}, "flip": {...}, "neutral": {...}},
+        }
+    """
+    # Step 1: Group by pair_id, separate source from follow-ups
+    pairs = {}
+    for row in results:
+        pid = row.get("pair_id", "")
+        if pid == "":
+            continue
+        pid = int(pid)
+        if pid not in pairs:
+            pairs[pid] = {"source": None, "followups": []}
+        if row.get("is_source"):
+            pairs[pid]["source"] = row
+        else:
+            pairs[pid]["followups"].append(row)
+
+    # Step 2: Count satisfactions per mr_type
+    counters = {
+        "overall": {"satisfied": 0, "total": 0},
+    }
+    for mr_type in ("inv", "flip", "neutral"):
+        counters[mr_type] = {"satisfied": 0, "total": 0}
+
+    for pid, pair_data in pairs.items():
+        src = pair_data["source"]
+        if src is None:
+            continue
+        src_pred = src.get("pred", "")
+
+        for fup in pair_data["followups"]:
+            mr = fup.get("mr_type", "")
+            fup_pred = fup.get("pred", "")
+            satisfied = False
+
+            if mr == "inv":
+                # Invariant: output must be identical
+                satisfied = (fup_pred == src_pred)
+
+            elif mr == "flip":
+                # entailment <-> contradiction; neutral stays neutral
+                if src_pred == "entailment":
+                    satisfied = (fup_pred == "contradiction")
+                elif src_pred == "contradiction":
+                    satisfied = (fup_pred == "entailment")
+                elif src_pred == "neutral":
+                    satisfied = (fup_pred == "neutral")
+
+            elif mr == "neutral":
+                # Follow-up must be neutral regardless of source
+                satisfied = (fup_pred == "neutral")
+
+            # Increment counters
+            counters["overall"]["total"] += 1
+            if satisfied:
+                counters["overall"]["satisfied"] += 1
+
+            if mr in counters:
+                counters[mr]["total"] += 1
+                if satisfied:
+                    counters[mr]["satisfied"] += 1
+
+    # Step 3: Compute rates
+    for key in counters:
+        t = counters[key]["total"]
+        s = counters[key]["satisfied"]
+        counters[key]["rate"] = (s / t * 100) if t > 0 else 0.0
+
+    return counters
+
+
 def main():
     configure_console_encoding()
     os.chdir(WORK_DIR)
@@ -295,6 +414,11 @@ def main():
     parser.add_argument("--max-samples", type=int, default=None, help="每个数据集最大测试数")
     parser.add_argument("--skip-original", action="store_true", help="跳过 Original 测试")
     parser.add_argument("--skip-mr", action="store_true", help="跳过 MR 测试")
+    parser.add_argument("--merged", action="store_true",
+                        help="使用 Merged 测试数据（单一 JSONL，source+MR 混合，is_source 字段区分）。"
+                             "计算 source accuracy、MR accuracy 和 MSR。")
+    parser.add_argument("--merged-path", default=None,
+                        help="覆盖 Merged 数据目录路径 (default: data/nli/mr_test_data_merged)")
     parser.add_argument("--model-task", default=None, choices=["binary", "3class"],
                         help="模型训练时的任务类型。与测试集任务不同时，自动折叠标签并调整prompt")
     parser.add_argument("--datasets", default=None,
@@ -309,6 +433,7 @@ def main():
     wanted = set(d.strip() for d in args.datasets.split(",")) if args.datasets else None
     orig_ds = {k: v for k, v in ORIGINAL_DATASETS.items() if not wanted or k in wanted}
     mr_ds = {k: v for k, v in MR_DATASETS.items() if not wanted or k in wanted}
+    merged_ds = {k: v for k, v in MERGED_DATASETS.items() if not wanted or k in wanted}
 
     output_root = Path(args.output_root)
     if not output_root.is_absolute():
@@ -317,6 +442,7 @@ def main():
     exp_base = output_root / args.experiment
     tests_orig_dir = exp_base / "tests" / "original"
     tests_mr_dir = exp_base / "tests" / "mr"
+    tests_merged_dir = exp_base / "tests" / "merged"
 
     model, tokenizer = load_model(args.base_model, lora_path)
 
@@ -379,26 +505,112 @@ def main():
             print(f"  ✅ {ds_name}: {correct}/{total} = {acc:.2f}%  ({elapsed:.0f}s)")
             all_results[f"mr/{ds_name}"] = {"total": total, "correct": correct, "acc": acc}
 
+    # === Merged 测试（单次推理，source + MR 混合） ===
+    if args.merged:
+        print(f"\n{'='*70}")
+        print(f"  📊 Merged 数据集测试（source + MR 混合，单次推理）")
+        print(f"{'='*70}\n")
+
+        merged_base = Path(args.merged_path) if args.merged_path else (WORK_DIR / "data" / "nli")
+
+        for ds_name in sorted(merged_ds.keys()):
+            filepath = merged_base / merged_ds[ds_name]
+            if not filepath.exists():
+                print(f"  ⚠️  文件不存在: {filepath}")
+                continue
+
+            print(f"--- {ds_name.upper()} ({filepath}) ---")
+            samples = load_jsonl_samples(filepath)
+            print(f"  加载 {len(samples)} 条")
+
+            # Merged 数据统一按三分类处理
+            labels = {0: "entailment", 1: "neutral", 2: "contradiction"}
+
+            out_path = tests_merged_dir / f"{ds_name}.jsonl"
+            total, correct, acc, elapsed = test_dataset(
+                model, tokenizer, samples, ds_name,
+                "3class", labels,
+                out_path, args.max_samples, model_task, args.batch_size,
+                test_type="merged",
+            )
+
+            # 分 source / MR 计算准确率
+            source_total = source_correct = 0
+            mr_total = mr_correct = 0
+            for r_path in [out_path]:
+                if r_path.exists():
+                    with open(r_path, encoding="utf-8") as f:
+                        for line in f:
+                            row = json.loads(line.strip())
+                            if row.get("is_source"):
+                                source_total += 1
+                                if row.get("correct"):
+                                    source_correct += 1
+                            else:
+                                mr_total += 1
+                                if row.get("correct"):
+                                    mr_correct += 1
+
+            source_acc = source_correct / source_total * 100 if source_total > 0 else 0
+            mr_acc = mr_correct / mr_total * 100 if mr_total > 0 else 0
+
+            # 计算 MSR
+            merged_results = load_jsonl_samples(out_path) if out_path.exists() else []
+            msr = compute_msr(merged_results) if merged_results else {}
+
+            print(f"  ✅ {ds_name}: {correct}/{total} = {acc:.2f}%  ({elapsed:.0f}s)")
+            print(f"     Source  : {source_correct}/{source_total} = {source_acc:.2f}%")
+            print(f"     MR      : {mr_correct}/{mr_total} = {mr_acc:.2f}%")
+            if msr:
+                overall = msr.get("overall", {})
+                print(f"     MSR     : {overall.get('satisfied', 0)}/{overall.get('total', 0)} = {overall.get('rate', 0):.2f}%")
+                for mr_type in ("inv", "flip", "neutral"):
+                    m = msr.get(mr_type, {})
+                    if m.get("total", 0) > 0:
+                        print(f"       {mr_type:<8}: {m.get('satisfied', 0)}/{m.get('total', 0)} = {m.get('rate', 0):.2f}%")
+
+            all_results[f"merged/{ds_name}"] = {
+                "total": total, "correct": correct, "acc": acc,
+                "source_total": source_total, "source_correct": source_correct, "source_acc": source_acc,
+                "mr_total": mr_total, "mr_correct": mr_correct, "mr_acc": mr_acc,
+                "msr": msr,
+            }
+
     # === 结果汇总 ===
     print(f"\n{'='*70}")
     print(f"  📊 测试结果汇总 - {args.experiment}")
     print(f"{'='*70}")
 
-    for category in ["original/", "mr/"]:
+    for category in ["original/", "mr/", "merged/"]:
         cat_results = {k: v for k, v in all_results.items() if k.startswith(category)}
         if cat_results:
             print(f"\n  {category.upper().rstrip('/')}:")
-            for ds_key in sorted(cat_results.keys()):
-                r = cat_results[ds_key]
-                ds_short = ds_key.split("/")[1]
-                print(f"    {ds_short:<10} {r['correct']:>4}/{r['total']:<5} ({r['acc']:.2f}%)")
-            total_c = sum(r["correct"] for r in cat_results.values())
-            total_t = sum(r["total"] for r in cat_results.values())
-            print(f"    {'总计':<10} {total_c:>4}/{total_t:<5} ({total_c/total_t*100:.2f}%)")
+            if category == "merged/":
+                # Merged 汇总：source acc, MR acc, MSR
+                for ds_key in sorted(cat_results.keys()):
+                    r = cat_results[ds_key]
+                    ds_short = ds_key.split("/")[1]
+                    print(f"    {ds_short:<10} overall {r['correct']:>4}/{r['total']:<5} ({r['acc']:.2f}%)")
+                    print(f"    {'':<10} source  {r.get('source_correct', 0):>4}/{r.get('source_total', 0):<5} ({r.get('source_acc', 0):.2f}%)")
+                    print(f"    {'':<10} MR      {r.get('mr_correct', 0):>4}/{r.get('mr_total', 0):<5} ({r.get('mr_acc', 0):.2f}%)")
+                    msr = r.get("msr", {})
+                    overall = msr.get("overall", {})
+                    if overall:
+                        print(f"    {'':<10} MSR     {overall.get('satisfied', 0):>4}/{overall.get('total', 0):<5} ({overall.get('rate', 0):.2f}%)")
+            else:
+                for ds_key in sorted(cat_results.keys()):
+                    r = cat_results[ds_key]
+                    ds_short = ds_key.split("/")[1]
+                    print(f"    {ds_short:<10} {r['correct']:>4}/{r['total']:<5} ({r['acc']:.2f}%)")
+                total_c = sum(r["correct"] for r in cat_results.values())
+                total_t = sum(r["total"] for r in cat_results.values())
+                print(f"    {'总计':<10} {total_c:>4}/{total_t:<5} ({total_c/total_t*100:.2f}%)")
 
     print(f"\n  LoRA: {lora_path}")
     print(f"  Original: {tests_orig_dir}")
     print(f"  MR:       {tests_mr_dir}")
+    if args.merged:
+        print(f"  Merged:   {tests_merged_dir}")
     print()
 
 

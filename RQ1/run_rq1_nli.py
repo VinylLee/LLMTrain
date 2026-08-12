@@ -18,7 +18,7 @@ NLI 模型在 4 个测试集（SNLI / MNLIm / MNLImm / SICK）的 Original 和 M
     # Dry-run 预览命令
     python RQ1/run_rq1_nli.py --model gemma-3-4b-it --dry-run
 
-流水线阶段：sample → convert → finetune → test_original → test_mr
+流水线阶段：sample → convert → finetune → test_merged（默认 merged test）
 """
 __test__ = False
 
@@ -43,7 +43,7 @@ RQ1_DIR = PROJECT_ROOT / "RQ1"
 DEFAULT_CONFIG = RQ1_DIR / "configs" / "rq1_nli_config.json"
 DEFAULT_OUTPUT_ROOT = RQ1_DIR / "output"
 
-STAGES = ["sample", "convert", "finetune", "test_original", "test_mr"]
+STAGES = ["sample", "convert", "finetune", "test_original", "test_mr", "test_merged"]
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -125,11 +125,29 @@ def build_experiment_list(config, args):
                 print(f"⚠️  模型 '{model_key}' 无 '{train_ds}' 训练数据，跳过。可用: {available_ds}")
                 continue
 
-            train_path = ds_cfg["original"] if exp_type == "original" else ds_cfg["mr"]
+            # Resolve training data path per experiment type
+            if exp_type == "original":
+                train_path = ds_cfg.get("original", "")
+            elif exp_type == "zaug":
+                train_path = ds_cfg.get("zaug", "")
+            else:  # mr
+                train_path = ds_cfg.get("mr", "")
+
+            if not train_path:
+                print(f"⚠️  模型 '{model_key}' / '{train_ds}' 无 '{exp_type}' 训练数据，跳过")
+                continue
+
             target = args.target if args.target is not None else ds_cfg["target"]
-            mr_mode = "none" if exp_type == "original" else args.mr_instruction_mode
+
+            # MR instruction mode: 只有 MR 实验使用 pair_operation
+            mr_mode = args.mr_instruction_mode if exp_type == "mr" else "none"
+
+            # Z-Aug: 预采样数据，跳过 sample 阶段（直接复制文件）
+            skip_sample = (exp_type == "zaug")
 
             for seed in args.seeds:
+                # Resolve zaug seed placeholder
+                resolved_train_path = train_path.replace("{seed}", str(seed))
                 name = f"rq1_{exp_type}_{train_ds}_seed{seed}"
                 ft_params = dict(defaults["ft_params"])
                 if args.lr is not None:
@@ -149,11 +167,12 @@ def build_experiment_list(config, args):
                     "name": name,
                     "exp_type": exp_type,
                     "train_dataset": train_ds,
-                    "train_data": train_path,
+                    "train_data": resolved_train_path,
                     "target": target,
                     "task_type": defaults["task_type"],
                     "seed": seed,
                     "mr_instruction_mode": mr_mode,
+                    "skip_sample": skip_sample,
                     "ft_params": ft_params,
                     "val_ratio": defaults["val_ratio"],
                     "cutoff_len": defaults["cutoff_len"],
@@ -283,6 +302,7 @@ STAGE_NAMES = {
     "finetune": "Fine-tuning",
     "test_original": "Test Original",
     "test_mr": "Test MR",
+    "test_merged": "Test Merged",
 }
 
 
@@ -307,6 +327,22 @@ def run_pipeline_stage(exp, model_cfg, output_root, progress, progress_file,
 
     # ── Stage 1: Sample ──────────────────────────────────────────────
     if stage == "sample":
+        if exp.get("skip_sample"):
+            # Z-Aug 等预采样数据：直接复制到 ft_datasets 目录
+            import shutil
+            sampled_path = ft_data_dir / "sampled.json"
+            if not args.dry_run:
+                ft_data_dir.mkdir(parents=True, exist_ok=True)
+                source_path = PROJECT_ROOT / exp["train_data"]
+                if not source_path.exists():
+                    print(f"    ⚠️  Z-Aug 数据不存在: {source_path}")
+                    return False
+                shutil.copy2(source_path, sampled_path)
+                print(f"    ✅ Z-Aug 预采样数据已复制: {sampled_path} ({sampled_path.stat().st_size} bytes)")
+            else:
+                print(f"    ▶ [DRY-RUN] copy {exp['train_data']} -> {sampled_path}")
+            return True
+
         cmd = [
             sys.executable, str(SCRIPTS_DIR / "sample_mettrain_pairid.py"),
             "--input", exp["train_data"],
@@ -388,6 +424,33 @@ def run_pipeline_stage(exp, model_cfg, output_root, progress, progress_file,
         return run_cmd(cmd, f"Test {exp['name']} ({stage})",
                        args.dry_run, cwd=PROJECT_ROOT, env=env)
 
+    # ── Stage 6: Test Merged ──────────────────────────────────────────
+    if stage == "test_merged":
+        lora_path = str(exp_dir / "model")
+        if not args.dry_run and not Path(lora_path).is_dir():
+            print(f"    ⚠️  LoRA 模型不存在: {lora_path}，跳过 {stage}")
+            return False
+
+        test_datasets = ",".join(args.test_datasets) if args.test_datasets else "snli,mnlim,mnlimm,sick"
+
+        cmd = [
+            sys.executable, str(SCRIPTS_DIR / "test_mettrain_experiment.py"),
+            "--experiment", exp["name"],
+            "--base-model", model_path,
+            "--lora", lora_path,
+            "--output-root", str(output_root),
+            "--datasets", test_datasets,
+            "--batch-size", str(args.test_batch_size),
+            "--merged",
+        ]
+        if args.max_samples is not None:
+            cmd.extend(["--max-samples", str(args.max_samples)])
+        if args.merged_data_path:
+            cmd.extend(["--merged-path", args.merged_data_path])
+
+        return run_cmd(cmd, f"Test {exp['name']} ({stage})",
+                       args.dry_run, cwd=PROJECT_ROOT, env=env)
+
     return True
 
 
@@ -398,30 +461,66 @@ def run_pipeline_stage(exp, model_cfg, output_root, progress, progress_file,
 def read_test_results(exp_dir):
     """读取单个实验的测试结果，返回 {test_type: {ds: {correct, total, acc}}}。"""
     results = {}
-    for test_type in ("original", "mr"):
+    for test_type in ("original", "mr", "merged"):
         tests_dir = exp_dir / "tests" / test_type
         if not tests_dir.is_dir():
             continue
-        results[test_type] = {}
-        for jsonl in sorted(tests_dir.glob("*.jsonl")):
-            ds_name = jsonl.stem
-            correct = 0
-            total = 0
-            try:
-                with open(jsonl, encoding="utf-8") as f:
-                    for line in f:
-                        line = line.strip()
-                        if not line:
-                            continue
-                        row = json.loads(line)
-                        total += 1
-                        if row.get("correct") is True:
-                            correct += 1
-            except Exception as e:
-                print(f"  ⚠️  读取 {jsonl} 出错: {e}")
-                continue
-            acc = (correct / total * 100) if total > 0 else 0.0
-            results[test_type][ds_name] = {"correct": correct, "total": total, "acc": acc}
+        if test_type == "merged":
+            # Merged 数据：按 is_source 分别统计 source accuracy 和 MR accuracy
+            results[test_type] = {}
+            for jsonl in sorted(tests_dir.glob("*.jsonl")):
+                ds_name = jsonl.stem
+                src_correct = src_total = 0
+                mr_correct = mr_total = 0
+                try:
+                    with open(jsonl, encoding="utf-8") as f:
+                        for line in f:
+                            line = line.strip()
+                            if not line:
+                                continue
+                            row = json.loads(line)
+                            if row.get("is_source"):
+                                src_total += 1
+                                if row.get("correct") is True:
+                                    src_correct += 1
+                            else:
+                                mr_total += 1
+                                if row.get("correct") is True:
+                                    mr_correct += 1
+                except Exception as e:
+                    print(f"  ⚠️  读取 {jsonl} 出错: {e}")
+                    continue
+                src_acc = (src_correct / src_total * 100) if src_total > 0 else 0.0
+                mr_acc = (mr_correct / mr_total * 100) if mr_total > 0 else 0.0
+                results[test_type][ds_name] = {
+                    "source": {"correct": src_correct, "total": src_total, "acc": src_acc},
+                    "mr": {"correct": mr_correct, "total": mr_total, "acc": mr_acc},
+                    # Overall (source + MR combined)
+                    "correct": src_correct + mr_correct,
+                    "total": src_total + mr_total,
+                    "acc": ((src_correct + mr_correct) / (src_total + mr_total) * 100) if (src_total + mr_total) > 0 else 0.0,
+                }
+        else:
+            results[test_type] = {}
+            for jsonl in sorted(tests_dir.glob("*.jsonl")):
+                ds_name = jsonl.stem
+                correct = 0
+                total = 0
+                try:
+                    with open(jsonl, encoding="utf-8") as f:
+                        for line in f:
+                            line = line.strip()
+                            if not line:
+                                continue
+                            row = json.loads(line)
+                            total += 1
+                            if row.get("correct") is True:
+                                correct += 1
+                except Exception as e:
+                    print(f"  ⚠️  读取 {jsonl} 出错: {e}")
+                    continue
+                acc = (correct / total * 100) if total > 0 else 0.0
+                results[test_type][ds_name] = {"correct": correct, "total": total, "acc": acc}
     return results
 
 
@@ -460,14 +559,21 @@ def generate_summary(output_root, experiments, model_key, seeds):
         key = (exp["exp_type"], exp["train_dataset"])
         groups.setdefault(key, {})
         results = all_data.get(exp["name"], {})
-        for test_type in ("original", "mr"):
+        for test_type in ("original", "mr", "merged"):
             groups[key].setdefault(test_type, {})
             for ds in test_datasets:
                 groups[key][test_type].setdefault(ds, [])
                 ds_results = results.get(test_type, {}).get(ds, {})
-                acc = ds_results.get("acc")
-                if acc is not None:
-                    groups[key][test_type][ds].append(acc)
+                if test_type == "merged":
+                    # Merged 有 source.acc 和 mr.acc 两个子指标
+                    src_acc = ds_results.get("source", {}).get("acc")
+                    mr_acc = ds_results.get("mr", {}).get("acc")
+                    if src_acc is not None and mr_acc is not None:
+                        groups[key][test_type][ds].append((src_acc, mr_acc))
+                else:
+                    acc = ds_results.get("acc")
+                    if acc is not None:
+                        groups[key][test_type][ds].append(acc)
 
     # ── Original Test Sets 表格 ─────────────────────────────────────
     lines.append("## Original Test Sets (Accuracy)")
@@ -545,37 +651,97 @@ def generate_summary(output_root, experiments, model_key, seeds):
     lines.append("---")
     lines.append("")
 
-    # ── RQ1 Key Comparison: Original vs MR Delta ────────────────────
-    lines.append("## RQ1 Key Comparison: Original vs MR Training Δ")
-    lines.append("")
-    lines.append("*(positive Δ = MR training improves over Original training)*")
-
-    for test_type, type_label in [("original", "Original Test"), ("mr", "MR Test")]:
-        lines.append(f"### {type_label}")
+    # ── Merged Test Sets (Source + MR accuracy) ─────────────────────
+    has_merged = any(groups[key].get("merged") for key in groups)
+    if has_merged:
+        lines.append("## Merged Test Results (Source Accuracy / MR Accuracy)")
         lines.append("")
-        lines.append("| Train DS | " + " | ".join(d.upper() for d in test_datasets) + " |")
-        lines.append("|" + "---|" * (1 + len(test_datasets)) + "")
+        lines.append("| Experiment | Type | Train DS | " + " | ".join(d.upper() for d in test_datasets) + " |")
+        lines.append("|" + "---|" * (4 + len(test_datasets)) + "")
+        for key, data in sorted(groups.items()):
+            exp_type, train_ds = key
+            test_data = data.get("merged", {})
+            if not test_data:
+                continue
+            row = f"| rq1_{exp_type}_{train_ds} | {exp_type} | {train_ds} |"
+            for ds in test_datasets:
+                pairs = test_data.get(ds, [])
+                if pairs:
+                    src_accs = [p[0] for p in pairs]
+                    mr_accs = [p[1] for p in pairs]
+                    if len(pairs) >= 2:
+                        src_mean = sum(src_accs) / len(src_accs)
+                        mr_mean = sum(mr_accs) / len(mr_accs)
+                        row += f" {src_mean:.1f}/{mr_mean:.1f}% |"
+                    else:
+                        row += f" {src_accs[0]:.1f}/{mr_accs[0]:.1f}% |"
+                else:
+                    row += " — |"
+            lines.append(row)
+        lines.append("")
+        lines.append("> 格式: source准确率 / MR准确率。Source = is_source=true 的原始数据；MR = is_source=false 的 MR 变体。")
+        lines.append("")
+        lines.append("---")
+        lines.append("")
+
+    # ── RQ1 Key Comparison: Δ table (merged test results) ──────────
+    lines.append("## RQ1 Key Comparison: Training Method Δ (Merged Test)")
+    lines.append("")
+    lines.append("*(Source accuracy = accuracy on is_source=true original test data;")
+    lines.append("MR accuracy = accuracy on is_source=false MR test data)*")
+    lines.append("")
+
+    for metric, metric_label in [("source", "Source Accuracy (Original Test)"), ("mr", "MR Accuracy")]:
+        lines.append(f"### {metric_label}")
+        lines.append("")
+        # Header: Train DS | Original | MR | Z-Aug
+        lines.append("| Train DS | Original | MR | Z-Aug | MR-Orig Δ | Z-Aug-Orig Δ |")
+        lines.append("|" + "---|" * 7 + "")
 
         for train_ds in sorted(set(exp["train_dataset"] for exp in experiments)):
             row = f"| {train_ds} |"
-            for ds in test_datasets:
-                orig_key = ("original", train_ds)
-                mr_key = ("mr", train_ds)
-                orig_accs = groups.get(orig_key, {}).get(test_type, {}).get(ds, [])
-                mr_accs = groups.get(mr_key, {}).get(test_type, {}).get(ds, [])
+            orig_vals = []
+            for etype in ["original", "mr", "zaug"]:
+                key = (etype, train_ds)
+                acc_pairs = groups.get(key, {}).get("merged", {}).get(train_ds, [])
+                # Or if no merged data, try original/mr test types
+                if not acc_pairs:
+                    acc_pairs_fb = groups.get(key, {}).get("merged", {}).get("mnlim", groups.get(key, {}).get("merged", {}).get("snli", groups.get(key, {}).get("merged", {}).get("sick", [])))
+                if not acc_pairs:
+                    # Fallback to non-merged test types
+                    for fb_type in ("original", "mr"):
+                        vals = groups.get(key, {}).get(fb_type, {}).get(train_ds, [])
+                        if vals:
+                            acc_pairs = [(v, 0) if metric == "source" else (0, v) for v in vals]
+                            break
 
-                if orig_accs and mr_accs:
-                    if is_multi_seed:
-                        orig_mean = sum(orig_accs) / len(orig_accs)
-                        mr_mean = sum(mr_accs) / len(mr_accs)
+                if acc_pairs:
+                    vals_list = [p[0] for p in acc_pairs] if metric == "source" else [p[1] for p in acc_pairs]
+                    if is_multi_seed and len(vals_list) >= 2:
+                        mean = sum(vals_list) / len(vals_list)
+                        row += f" {mean:.2f}% |"
                     else:
-                        orig_mean = orig_accs[0]
-                        mr_mean = mr_accs[0]
-                    delta = mr_mean - orig_mean
-                    sign = "+" if delta >= 0 else ""
-                    row += f" {sign}{delta:.2f}% |"
+                        row += f" {vals_list[0]:.2f}% |"
+                    orig_vals.append(vals_list)
                 else:
                     row += " — |"
+                    orig_vals.append(None)
+
+            # Deltas: MR-Orig and Z-Aug-Orig
+            if orig_vals[0] and orig_vals[1]:  # original and mr both present
+                o_mean = sum(orig_vals[0]) / len(orig_vals[0]) if is_multi_seed else orig_vals[0][0]
+                m_mean = sum(orig_vals[1]) / len(orig_vals[1]) if is_multi_seed else orig_vals[1][0]
+                d1 = m_mean - o_mean
+                row += f" {'+' if d1 >= 0 else ''}{d1:.2f}% |"
+            else:
+                row += " — |"
+            if orig_vals[0] and orig_vals[2]:  # original and zaug both present
+                o_mean = sum(orig_vals[0]) / len(orig_vals[0]) if is_multi_seed else orig_vals[0][0]
+                z_mean = sum(orig_vals[2]) / len(orig_vals[2]) if is_multi_seed else orig_vals[2][0]
+                d2 = z_mean - o_mean
+                row += f" {'+' if d2 >= 0 else ''}{d2:.2f}% |"
+            else:
+                row += " — |"
             lines.append(row)
         lines.append("")
 
@@ -633,7 +799,7 @@ def parse_args():
     p.add_argument("--model", required=True,
                    help="模型 key（如 gemma-3-4b-it, llama-3.2-3b）")
     p.add_argument("--experiment", nargs="+", default=["original", "mr"],
-                   choices=["original", "mr"],
+                   choices=["original", "mr", "zaug"],
                    help="实验类型 (default: original mr)")
     p.add_argument("--train-data", nargs="+", default=None,
                    help="训练数据集 (default: 配置中的 default_train_datasets)")
@@ -667,9 +833,13 @@ def parse_args():
                    help=f"配置文件路径 (default: {DEFAULT_CONFIG})")
     p.add_argument("--steps", nargs="+", default=STAGES,
                    choices=STAGES,
-                   help="流水线阶段子集 (default: 全部 5 个阶段)")
+                   help="流水线阶段子集 (default: 全部 6 个阶段)")
     p.add_argument("--test-datasets", nargs="+", default=None,
                    help="测试数据集子集 (default: 全部 4 个)")
+    p.add_argument("--no-merged-test", action="store_true",
+                   help="禁用 merged test，使用传统的 test_original+test_mr 分开测试")
+    p.add_argument("--merged-data-path", default=None,
+                   help="覆盖 Merged 数据目录路径 (default: data/nli/mr_test_data_merged)")
     p.add_argument("--cuda", default=None, help="覆盖 CUDA 设备号")
     p.add_argument("--only", nargs="+", default=None,
                    help="只运行指定实验名（用于选择性重跑）")
@@ -754,6 +924,18 @@ def main():
     # ── 进度文件 ──────────────────────────────────────────────────────
     progress_file = output_root / "_progress.json"
     progress = load_progress(progress_file) if args.resume else {}
+
+    # ── Merged test 为默认模式：替换 test_original + test_mr ─────────
+    if not args.no_merged_test:
+        args.steps = [s for s in args.steps if s not in ("test_original", "test_mr")]
+        if "test_merged" not in args.steps:
+            args.steps.append("test_merged")
+        print(f"  📊 Test mode: merged (source+MR 单次推理). 使用 --no-merged-test 切换为传统模式")
+    else:
+        # 传统模式：移除 test_merged，保留 test_original + test_mr
+        if "test_merged" in args.steps:
+            args.steps.remove("test_merged")
+        print(f"  📊 Test mode: legacy (test_original + test_mr 分开测试)")
 
     # ── 运行流水线 ────────────────────────────────────────────────────
     total = len(experiments)
