@@ -442,6 +442,8 @@ def run_pipeline_stage(exp, model_cfg, output_root, progress, progress_file,
             "--datasets", test_datasets,
             "--batch-size", str(args.test_batch_size),
             "--merged",
+            # 只跑 merged 单次推理；显式跳过 original/mr，避免测试脚本重复跑两遍无用结果
+            "--skip-original", "--skip-mr",
         ]
         if args.max_samples is not None:
             cmd.extend(["--max-samples", str(args.max_samples)])
@@ -466,12 +468,13 @@ def read_test_results(exp_dir):
         if not tests_dir.is_dir():
             continue
         if test_type == "merged":
-            # Merged 数据：按 is_source 分别统计 source accuracy 和 MR accuracy
+            # Merged 数据：按 is_source 分别统计 source/MR accuracy，并计算 MSR
             results[test_type] = {}
             for jsonl in sorted(tests_dir.glob("*.jsonl")):
                 ds_name = jsonl.stem
                 src_correct = src_total = 0
                 mr_correct = mr_total = 0
+                rows = []
                 try:
                     with open(jsonl, encoding="utf-8") as f:
                         for line in f:
@@ -479,6 +482,7 @@ def read_test_results(exp_dir):
                             if not line:
                                 continue
                             row = json.loads(line)
+                            rows.append(row)
                             if row.get("is_source"):
                                 src_total += 1
                                 if row.get("correct") is True:
@@ -492,6 +496,10 @@ def read_test_results(exp_dir):
                     continue
                 src_acc = (src_correct / src_total * 100) if src_total > 0 else 0.0
                 mr_acc = (mr_correct / mr_total * 100) if mr_total > 0 else 0.0
+                # MSR：复用 test_mettrain_experiment.compute_msr（按 pair_id 分组核对 MR 关系）
+                # 延迟导入，避免启动时加载 torch/transformers
+                from test_mettrain_experiment import compute_msr
+                msr = compute_msr(rows) if rows else {}
                 results[test_type][ds_name] = {
                     "source": {"correct": src_correct, "total": src_total, "acc": src_acc},
                     "mr": {"correct": mr_correct, "total": mr_total, "acc": mr_acc},
@@ -499,6 +507,7 @@ def read_test_results(exp_dir):
                     "correct": src_correct + mr_correct,
                     "total": src_total + mr_total,
                     "acc": ((src_correct + mr_correct) / (src_total + mr_total) * 100) if (src_total + mr_total) > 0 else 0.0,
+                    "msr": msr,
                 }
         else:
             results[test_type] = {}
@@ -565,11 +574,12 @@ def generate_summary(output_root, experiments, model_key, seeds):
                 groups[key][test_type].setdefault(ds, [])
                 ds_results = results.get(test_type, {}).get(ds, {})
                 if test_type == "merged":
-                    # Merged 有 source.acc 和 mr.acc 两个子指标
+                    # Merged 有 source.acc、mr.acc 和 msr.overall.rate 三个子指标
                     src_acc = ds_results.get("source", {}).get("acc")
                     mr_acc = ds_results.get("mr", {}).get("acc")
+                    msr_rate = (ds_results.get("msr", {}) or {}).get("overall", {}).get("rate")
                     if src_acc is not None and mr_acc is not None:
-                        groups[key][test_type][ds].append((src_acc, mr_acc))
+                        groups[key][test_type][ds].append((src_acc, mr_acc, msr_rate))
                 else:
                     acc = ds_results.get("acc")
                     if acc is not None:
@@ -680,6 +690,37 @@ def generate_summary(output_root, experiments, model_key, seeds):
             lines.append(row)
         lines.append("")
         lines.append("> 格式: source准确率 / MR准确率。Source = is_source=true 的原始数据；MR = is_source=false 的 MR 变体。")
+        lines.append("")
+        lines.append("---")
+        lines.append("")
+
+    # ── Merged MSR (Metamorphic Satisfaction Rate) ──────────────────
+    if has_merged:
+        lines.append("## Merged Test Results — MSR (Metamorphic Satisfaction Rate, overall)")
+        lines.append("")
+        lines.append("> MSR overall = compute_msr() 整体 satisfaction rate（%）")
+        lines.append("")
+        lines.append("| Experiment | Type | Train DS | " + " | ".join(d.upper() for d in test_datasets) + " |")
+        lines.append("|" + "---|" * (4 + len(test_datasets)) + "")
+        for key, data in sorted(groups.items()):
+            exp_type, train_ds = key
+            test_data = data.get("merged", {})
+            if not test_data:
+                continue
+            row = f"| rq1_{exp_type}_{train_ds} | {exp_type} | {train_ds} |"
+            for ds in test_datasets:
+                rates = [p[2] for p in test_data.get(ds, []) if len(p) > 2 and p[2] is not None]
+                if rates:
+                    if len(rates) >= 2:
+                        mean = sum(rates) / len(rates)
+                        var = sum((r - mean) ** 2 for r in rates) / (len(rates) - 1)
+                        std = math.sqrt(var)
+                        row += f" {mean:.2f} ± {std:.2f}% |"
+                    else:
+                        row += f" {rates[0]:.2f}% |"
+                else:
+                    row += " — |"
+            lines.append(row)
         lines.append("")
         lines.append("---")
         lines.append("")
