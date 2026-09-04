@@ -411,6 +411,8 @@ def main():
     parser.add_argument("--experiment", required=True, help="实验名")
     parser.add_argument("--base-model", default="google/gemma-3-4b-it")
     parser.add_argument("--lora", default=None, help="LoRA 权重路径（覆盖 --experiment）")
+    parser.add_argument("--no-lora", action="store_true",
+                        help="仅使用 base model，不加载 LoRA（zero-shot 推理）")
     parser.add_argument("--max-samples", type=int, default=None, help="每个数据集最大测试数")
     parser.add_argument("--skip-original", action="store_true", help="跳过 Original 测试")
     parser.add_argument("--skip-mr", action="store_true", help="跳过 MR 测试")
@@ -438,7 +440,7 @@ def main():
     output_root = Path(args.output_root)
     if not output_root.is_absolute():
         output_root = WORK_DIR / output_root
-    lora_path = args.lora or str(output_root / args.experiment / "model")
+    lora_path = None if args.no_lora else (args.lora or str(output_root / args.experiment / "model"))
     exp_base = output_root / args.experiment
     tests_orig_dir = exp_base / "tests" / "original"
     tests_mr_dir = exp_base / "tests" / "mr"
@@ -606,7 +608,10 @@ def main():
                 total_t = sum(r["total"] for r in cat_results.values())
                 print(f"    {'总计':<10} {total_c:>4}/{total_t:<5} ({total_c/total_t*100:.2f}%)")
 
-    print(f"\n  LoRA: {lora_path}")
+    if lora_path:
+        print(f"\n  LoRA: {lora_path}")
+    else:
+        print(f"\n  Mode: zero-shot (base model only, no LoRA)")
     print(f"  Original: {tests_orig_dir}")
     print(f"  MR:       {tests_mr_dir}")
     if args.merged:

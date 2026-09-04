@@ -118,6 +118,29 @@ def build_experiment_list(config, args):
 
     experiments = []
     for exp_type in args.experiment:
+        # ── Zeroshot: 无训练，仅测试 merged test set ──────────────────
+        if exp_type == "zeroshot":
+            name = "rq1_zeroshot"
+            exp = {
+                "name": name,
+                "exp_type": "zeroshot",
+                "train_dataset": None,
+                "train_data": None,
+                "target": 0,
+                "task_type": defaults["task_type"],
+                "seed": 0,
+                "mr_instruction_mode": "none",
+                "skip_sample": True,
+                "ft_params": {},
+                "val_ratio": defaults["val_ratio"],
+                "cutoff_len": defaults["cutoff_len"],
+                "eval_strategy": defaults.get("eval_strategy", "no"),
+                "save_steps": defaults.get("save_steps", 9999),
+                "save_total_limit": defaults.get("save_total_limit", 2),
+            }
+            experiments.append(exp)
+            continue
+
         for train_ds in args.train_data:
             ds_cfg = model_cfg["training_data"].get(train_ds)
             if ds_cfg is None:
@@ -130,6 +153,8 @@ def build_experiment_list(config, args):
                 train_path = ds_cfg.get("original", "")
             elif exp_type == "zaug":
                 train_path = ds_cfg.get("zaug", "")
+            elif exp_type == "disco":
+                train_path = ds_cfg.get("disco", "")
             else:  # mr
                 train_path = ds_cfg.get("mr", "")
 
@@ -142,8 +167,8 @@ def build_experiment_list(config, args):
             # MR instruction mode: 只有 MR 实验使用 pair_operation
             mr_mode = args.mr_instruction_mode if exp_type == "mr" else "none"
 
-            # Z-Aug: 预采样数据，跳过 sample 阶段（直接复制文件）
-            skip_sample = (exp_type == "zaug")
+            # Z-Aug / DISCO: 预采样数据，跳过 sample 阶段（直接复制文件）
+            skip_sample = (exp_type in ("zaug", "disco"))
 
             for seed in args.seeds:
                 # Resolve zaug seed placeholder
@@ -325,6 +350,11 @@ def run_pipeline_stage(exp, model_cfg, output_root, progress, progress_file,
         torch_compile_disable=True,
     )
 
+    # ── Zeroshot: 跳过训练相关阶段 ──────────────────────────────────
+    if exp.get("exp_type") == "zeroshot" and stage in ("sample", "convert", "finetune"):
+        print(f"  ⏭️  {STAGE_NAMES[stage]} — zeroshot 模式跳过")
+        return True
+
     # ── Stage 1: Sample ──────────────────────────────────────────────
     if stage == "sample":
         if exp.get("skip_sample"):
@@ -426,10 +456,49 @@ def run_pipeline_stage(exp, model_cfg, output_root, progress, progress_file,
 
     # ── Stage 6: Test Merged ──────────────────────────────────────────
     if stage == "test_merged":
-        lora_path = str(exp_dir / "model")
-        if not args.dry_run and not Path(lora_path).is_dir():
-            print(f"    ⚠️  LoRA 模型不存在: {lora_path}，跳过 {stage}")
-            return False
+        is_zeroshot = exp.get("exp_type") == "zeroshot"
+        api_cfg = model_cfg.get("api") if is_zeroshot else None
+
+        # ── API 模式（zeroshot + 远程 API，如 DeepSeek / LM Studio） ──
+        if api_cfg:
+            api_url = os.getenv(api_cfg.get("url_env", ""), "")
+            api_key = os.getenv(api_cfg.get("key_env", ""), "")
+            api_model = api_cfg.get("model", model_cfg.get("hub_id", ""))
+
+            test_datasets = ",".join(args.test_datasets) if args.test_datasets else "snli,mnlim,mnlimm,sick"
+
+            cmd = [
+                sys.executable, str(SCRIPTS_DIR / "test_merged_via_api.py"),
+                "--experiment", exp["name"],
+                "--api-model", api_model,
+                "--output-root", str(output_root),
+                "--datasets", test_datasets,
+            ]
+            # URL/key 未在当前 shell 导出时省略，由 test_merged_via_api.py 从 .env 回退解析
+            if api_url:
+                cmd.extend(["--api-url", api_url])
+            if api_key:
+                cmd.extend(["--api-key", api_key])
+            # reasoning 控制（如 deepseek reason off → reasoning_effort="none"）
+            if api_cfg.get("reasoning_effort"):
+                cmd.extend(["--reasoning-effort", api_cfg["reasoning_effort"]])
+            if args.max_samples is not None:
+                cmd.extend(["--max-samples", str(args.max_samples)])
+            if args.merged_data_path:
+                cmd.extend(["--merged-data-dir", args.merged_data_path])
+
+            return run_cmd(cmd, f"Test {exp['name']} ({stage}, API: {api_model})",
+                           args.dry_run, cwd=PROJECT_ROOT, env=env)
+
+        # ── 本地模式（zeroshot base model 或 LoRA 微调模型） ──
+        if is_zeroshot:
+            # Zero-shot base model: 不需要 LoRA
+            lora_path = None
+        else:
+            lora_path = str(exp_dir / "model")
+            if not args.dry_run and not Path(lora_path).is_dir():
+                print(f"    ⚠️  LoRA 模型不存在: {lora_path}，跳过 {stage}")
+                return False
 
         test_datasets = ",".join(args.test_datasets) if args.test_datasets else "snli,mnlim,mnlimm,sick"
 
@@ -437,14 +506,16 @@ def run_pipeline_stage(exp, model_cfg, output_root, progress, progress_file,
             sys.executable, str(SCRIPTS_DIR / "test_mettrain_experiment.py"),
             "--experiment", exp["name"],
             "--base-model", model_path,
-            "--lora", lora_path,
             "--output-root", str(output_root),
             "--datasets", test_datasets,
             "--batch-size", str(args.test_batch_size),
             "--merged",
-            # 只跑 merged 单次推理；显式跳过 original/mr，避免测试脚本重复跑两遍无用结果
             "--skip-original", "--skip-mr",
         ]
+        if is_zeroshot:
+            cmd.append("--no-lora")
+        else:
+            cmd.extend(["--lora", lora_path])
         if args.max_samples is not None:
             cmd.extend(["--max-samples", str(args.max_samples)])
         if args.merged_data_path:
@@ -557,6 +628,14 @@ def generate_summary(output_root, experiments, model_key, seeds):
         report_path.write_text("\n".join(lines), encoding="utf-8")
         return report_path
 
+    def _exp_label(exp_type, train_ds):
+        """生成实验标签。zeroshot 无 train_ds 时不带数据集后缀。"""
+        return f"rq1_{exp_type}_{train_ds}" if train_ds else f"rq1_{exp_type}"
+
+    def _train_ds_display(train_ds):
+        """训练集显示名。zeroshot 无训练集时显示 —。"""
+        return train_ds if train_ds else "—"
+
     test_datasets = ["snli", "mnlim", "mnlimm", "sick"]
 
     # ── 按 experiment × test_type 聚合 ──────────────────────────────
@@ -594,7 +673,7 @@ def generate_summary(output_root, experiments, model_key, seeds):
         for key, data in sorted(groups.items()):
             exp_type, train_ds = key
             test_data = data.get("original", {})
-            row = f"| rq1_{exp_type}_{train_ds} | {exp_type} | {train_ds} |"
+            row = f"| {_exp_label(exp_type, train_ds)} | {exp_type} | {_train_ds_display(train_ds)} |"
             for ds in test_datasets:
                 accs = test_data.get(ds, [])
                 if len(accs) >= 2:
@@ -614,7 +693,7 @@ def generate_summary(output_root, experiments, model_key, seeds):
         for key, data in sorted(groups.items()):
             exp_type, train_ds = key
             test_data = data.get("original", {})
-            row = f"| rq1_{exp_type}_{train_ds} | {exp_type} | {train_ds} |"
+            row = f"| {_exp_label(exp_type, train_ds)} | {exp_type} | {_train_ds_display(train_ds)} |"
             for ds in test_datasets:
                 accs = test_data.get(ds, [])
                 row += f" {accs[0]:.2f}% |" if accs else " — |"
@@ -631,7 +710,7 @@ def generate_summary(output_root, experiments, model_key, seeds):
         for key, data in sorted(groups.items()):
             exp_type, train_ds = key
             test_data = data.get("mr", {})
-            row = f"| rq1_{exp_type}_{train_ds} | {exp_type} | {train_ds} |"
+            row = f"| {_exp_label(exp_type, train_ds)} | {exp_type} | {_train_ds_display(train_ds)} |"
             for ds in test_datasets:
                 accs = test_data.get(ds, [])
                 if len(accs) >= 2:
@@ -651,7 +730,7 @@ def generate_summary(output_root, experiments, model_key, seeds):
         for key, data in sorted(groups.items()):
             exp_type, train_ds = key
             test_data = data.get("mr", {})
-            row = f"| rq1_{exp_type}_{train_ds} | {exp_type} | {train_ds} |"
+            row = f"| {_exp_label(exp_type, train_ds)} | {exp_type} | {_train_ds_display(train_ds)} |"
             for ds in test_datasets:
                 accs = test_data.get(ds, [])
                 row += f" {accs[0]:.2f}% |" if accs else " — |"
@@ -673,7 +752,7 @@ def generate_summary(output_root, experiments, model_key, seeds):
             test_data = data.get("merged", {})
             if not test_data:
                 continue
-            row = f"| rq1_{exp_type}_{train_ds} | {exp_type} | {train_ds} |"
+            row = f"| {_exp_label(exp_type, train_ds)} | {exp_type} | {_train_ds_display(train_ds)} |"
             for ds in test_datasets:
                 pairs = test_data.get(ds, [])
                 if pairs:
@@ -707,7 +786,7 @@ def generate_summary(output_root, experiments, model_key, seeds):
             test_data = data.get("merged", {})
             if not test_data:
                 continue
-            row = f"| rq1_{exp_type}_{train_ds} | {exp_type} | {train_ds} |"
+            row = f"| {_exp_label(exp_type, train_ds)} | {exp_type} | {_train_ds_display(train_ds)} |"
             for ds in test_datasets:
                 rates = [p[2] for p in test_data.get(ds, []) if len(p) > 2 and p[2] is not None]
                 if rates:
@@ -735,14 +814,14 @@ def generate_summary(output_root, experiments, model_key, seeds):
     for metric, metric_label in [("source", "Source Accuracy (Original Test)"), ("mr", "MR Accuracy")]:
         lines.append(f"### {metric_label}")
         lines.append("")
-        # Header: Train DS | Original | MR | Z-Aug
-        lines.append("| Train DS | Original | MR | Z-Aug | MR-Orig Δ | Z-Aug-Orig Δ |")
-        lines.append("|" + "---|" * 7 + "")
+        # Header: Train DS | Original | MR | Z-Aug | DISCO
+        lines.append("| Train DS | Original | MR | Z-Aug | DISCO | MR-Orig Δ | Z-Aug-Orig Δ | DISCO-Orig Δ |")
+        lines.append("|" + "---|" * 9 + "")
 
-        for train_ds in sorted(set(exp["train_dataset"] for exp in experiments)):
+        for train_ds in sorted(set(exp["train_dataset"] for exp in experiments if exp["train_dataset"] is not None)):
             row = f"| {train_ds} |"
             orig_vals = []
-            for etype in ["original", "mr", "zaug"]:
+            for etype in ["original", "mr", "zaug", "disco"]:
                 key = (etype, train_ds)
                 acc_pairs = groups.get(key, {}).get("merged", {}).get(train_ds, [])
                 # Or if no merged data, try original/mr test types
@@ -783,8 +862,55 @@ def generate_summary(output_root, experiments, model_key, seeds):
                 row += f" {'+' if d2 >= 0 else ''}{d2:.2f}% |"
             else:
                 row += " — |"
+            if len(orig_vals) > 3 and orig_vals[0] and orig_vals[3]:  # original and disco both present
+                o_mean = sum(orig_vals[0]) / len(orig_vals[0]) if is_multi_seed else orig_vals[0][0]
+                dc_mean = sum(orig_vals[3]) / len(orig_vals[3]) if is_multi_seed else orig_vals[3][0]
+                d3 = dc_mean - o_mean
+                row += f" {'+' if d3 >= 0 else ''}{d3:.2f}% |"
+            else:
+                row += " — |"
             lines.append(row)
         lines.append("")
+
+    # ── Zero-Shot Baseline（如有 zeroshot 实验则单独列出） ──────────
+    zeroshot_key = ("zeroshot", None)
+    if zeroshot_key in groups:
+        zs_data = groups[zeroshot_key].get("merged", {})
+        if zs_data:
+            lines.append("## Zero-Shot Baseline (Merged Test)")
+            lines.append("")
+            lines.append("*(No fine-tuning — base model evaluated directly on the merged test set)*")
+            lines.append("")
+            lines.append("| Model | " + " | ".join(d.upper() for d in test_datasets) + " |")
+            lines.append("|" + "---|" * (1 + len(test_datasets)) + "")
+
+            # Source accuracy row
+            src_row = f"| {model_key} (Source Acc) |"
+            # MR accuracy row
+            mr_row = f"| {model_key} (MR Acc) |"
+            # MSR row
+            msr_row = f"| {model_key} (MSR) |"
+            for ds in test_datasets:
+                pairs = zs_data.get(ds, [])
+                if pairs:
+                    src_vals = [p[0] for p in pairs]
+                    mr_vals = [p[1] for p in pairs]
+                    msr_vals = [p[2] for p in pairs if len(p) > 2 and p[2] is not None]
+                    src_row += f" {src_vals[0]:.1f}% |"
+                    mr_row += f" {mr_vals[0]:.1f}% |"
+                    if msr_vals:
+                        msr_row += f" {msr_vals[0]:.1f}% |"
+                    else:
+                        msr_row += " — |"
+                else:
+                    src_row += " — |"
+                    mr_row += " — |"
+                    msr_row += " — |"
+            lines.append(src_row)
+            lines.append(mr_row)
+            if any(zs_data.get(ds) and len(zs_data[ds]) > 0 and any(len(p) > 2 and p[2] is not None for p in zs_data[ds]) for ds in test_datasets):
+                lines.append(msr_row)
+            lines.append("")
 
     if is_multi_seed:
         lines.append(f"> 准确率格式: 均值 ± 样本标准差 (分母 n-1, {len(seeds)} seeds)")
@@ -840,7 +966,7 @@ def parse_args():
     p.add_argument("--model", required=True,
                    help="模型 key（如 gemma-3-4b-it, llama-3.2-3b）")
     p.add_argument("--experiment", nargs="+", default=["original", "mr"],
-                   choices=["original", "mr", "zaug"],
+                   choices=["original", "mr", "zaug", "disco", "zeroshot"],
                    help="实验类型 (default: original mr)")
     p.add_argument("--train-data", nargs="+", default=None,
                    help="训练数据集 (default: 配置中的 default_train_datasets)")

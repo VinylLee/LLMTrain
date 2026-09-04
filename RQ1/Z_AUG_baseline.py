@@ -45,7 +45,7 @@ from run_rq1_nli import (
 )
 
 DEFAULT_CONFIG = RQ1_DIR / "configs" / "rq1_nli_config.json"
-Z_AUG_DATA_DIR = PROJECT_ROOT / "data" / "nli" / "zaug" / "rq1"
+Z_AUG_DATA_DIR = PROJECT_ROOT / "data" / "nli" / "zaug" / "rq1_mnli"
 FT_DATASETS_DIR = PROJECT_ROOT / "data" / "ft_datasets"
 DEFAULT_OUTPUT_ROOT = RQ1_DIR / "output" / "zaug_baseline"
 DEFAULT_SEEDS = [42, 43, 44, 45, 46]

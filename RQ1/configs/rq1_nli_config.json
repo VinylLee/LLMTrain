@@ -13,12 +13,14 @@
         "snli": {
           "original": "data/nli/original_dataset/snli/train.json",
           "mr": "data/nli/mettrain/snli_lr0.0037_gemma-3-4b-it-qat/augmented_data.json",
+          "zaug": "data/nli/zaug/rq1_snli/snli_zaug_sample_s{seed}.jsonl",
+          "disco": "data/nli/disco/disco_snli/disco_seed{seed}.jsonl",
           "target": 5340
         },
         "mnlim": {
           "original": "data/nli/original_dataset/mnlim/train.json",
           "mr": "data/nli/mettrain/mnlim_lr0.0051_gemma-3-4b-it-qat/augmented_data.json",
-          "zaug": "data/nli/zaug/rq1/zaug_sample_s{seed}.jsonl",
+          "zaug": "data/nli/zaug/rq1_mnli/zaug_sample_s{seed}.jsonl",
           "target": 4413
         },
         "mnlimm": {
@@ -46,12 +48,14 @@
         "snli": {
           "original": "data/nli/original_dataset/snli/train.json",
           "mr": "data/nli/mettrain/snli_lr0.0037_llama-3.2-3b-instruct/augmented_data.json",
+          "zaug": "data/nli/zaug/rq1_snli/snli_zaug_sample_s{seed}.jsonl",
+          "disco": "data/nli/disco/disco_snli/disco_seed{seed}.jsonl",
           "target": 4149
         },
         "mnlim": {
           "original": "data/nli/original_dataset/mnlim/train.json",
           "mr": "data/nli/mettrain/mnlim_lr0.0051_llama-3.2-3b-instruct/augmented_data.json",
-          "zaug": "data/nli/zaug/rq1/zaug_sample_s{seed}.jsonl",
+          "zaug": "data/nli/zaug/rq1_mnli/zaug_sample_s{seed}.jsonl",
           "target": 3969
         },
         "mnlimm": {
@@ -66,6 +70,37 @@
           "_note": "全量 sick MR 数据为 8669 条；默认 target=4439 匹配 original 大小。"
         }
       }
+    },
+
+    "llama-3.3-70b-instruct": {
+      "hub_id": "llama-3.3-70b-instruct",
+      "local_path": null,
+      "local_tokenizer_path": null,
+      "template": "llama3",
+      "cuda": "0",
+      "_note": "仅支持 zeroshot 评测（通过 LM Studio API），无微调训练数据配置。",
+      "api": {
+        "url_env": "LMSTUDIO_BASE_URL",
+        "key_env": "LMSTUDIO_KEY",
+        "model": "llama-3.3-70b-instruct"
+      },
+      "training_data": {}
+    },
+
+    "deepseek-v4-flash-reason-off": {
+      "hub_id": "deepseek-v4-flash",
+      "local_path": null,
+      "local_tokenizer_path": null,
+      "template": "none",
+      "cuda": "0",
+      "_note": "仅支持 zeroshot 评测（DeepSeek API；reasoning_effort=none 关闭思维链，即 reason off）。",
+      "api": {
+        "url_env": "DEEPSEEK_OPENAI_BASE_URL",
+        "key_env": "DEEPSEEK_KEY",
+        "model": "deepseek-v4-flash",
+        "reasoning_effort": "none"
+      },
+      "training_data": {}
     }
   },
 
@@ -104,7 +139,7 @@
 
   "default_seeds": [42, 43, 44],
   "default_train_datasets": ["snli", "mnlim", "sick"],
-  "default_experiment_types": ["original", "mr", "zaug"],
+  "default_experiment_types": ["original", "mr", "zaug", "disco"],
   "default_mr_instruction_mode": "none",
   "_mr_instruction_note": "只有 MR 实验使用 pair_operation；original 和 zaug 使用 none",
   "default_test_mode": "merged",
