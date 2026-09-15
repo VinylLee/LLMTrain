@@ -32,6 +32,7 @@ Primary paper: `bare_jrnl_new_sample4.tex` (IEEEtran format).
 - **`scripts/evaluate.py`** — Evaluate prediction results and generate accuracy/F1/confusion-matrix reports
 - **`scripts/mrv.py`** — Compute MRV (Mutation Rate Value = error rate per MR and dataset)
 - **`scripts/mrv_excel.py`** — Export MRV report to Excel
+- **`scripts/count_dataset_tokens.py`** — 统计数据集记录数与 token 总量，输出 **raw 文本** 与 **完整训练样本（chat-template）** 两口径；自动识别记录格式（Alpaca converted / 原始 NLI premise+hypothesis / 带 MR 标记的变体行 / 其它），MR 变体行因真实训练文本需转换上下文而不估算 train（raw 仍给）。tokenizer 默认本地缓存 `models/google/gemma-3-4b-it`，可用 `--tokenizer` 覆盖；支持单文件、JSONL、目录聚合
 
 ## Data Structure
 

@@ -40,6 +40,7 @@ SCRIPTS_DIR = PROJECT_ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS_DIR))
 
 from project_runtime import PROJECT_ROOT as PR
+from metamorphic_metrics import compute_joint_correctness, compute_msr
 
 WORK_DIR = PR
 
@@ -364,15 +365,36 @@ def main():
 
         source_acc = source_correct / source_total * 100 if source_total > 0 else 0
         mr_acc = mr_correct / mr_total * 100 if mr_total > 0 else 0
+        merged_results = load_jsonl(out_path) if out_path.exists() else []
+        msr = compute_msr(merged_results) if merged_results else {}
+        joint_correctness = (
+            compute_joint_correctness(merged_results) if merged_results else {}
+        )
 
         print(f"  ✅ {ds_name}: {correct}/{total} = {acc:.2f}%  ({elapsed:.0f}s)")
         print(f"     Source  : {source_correct}/{source_total} = {source_acc:.2f}%")
         print(f"     MR      : {mr_correct}/{mr_total} = {mr_acc:.2f}%")
+        if msr:
+            overall = msr.get("overall", {})
+            print(
+                f"     MSR     : {overall.get('satisfied', 0)}/"
+                f"{overall.get('total', 0)} = {overall.get('rate', 0):.2f}%"
+            )
+        if joint_correctness:
+            overall = joint_correctness.get("overall", {})
+            rate = overall.get("rate")
+            rate_text = f"{rate:.2f}%" if rate is not None else "N/A"
+            print(
+                f"     Joint   : {overall.get('correct', 0)}/"
+                f"{overall.get('total', 0)} = {rate_text}"
+            )
 
         all_results[f"merged/{ds_name}"] = {
             "total": total, "correct": correct, "acc": acc,
             "source_total": source_total, "source_correct": source_correct, "source_acc": source_acc,
             "mr_total": mr_total, "mr_correct": mr_correct, "mr_acc": mr_acc,
+            "msr": msr,
+            "joint_correctness": joint_correctness,
         }
 
     # Summary
@@ -385,6 +407,20 @@ def main():
         print(f"  {ds_short:<10} overall {r['correct']:>5}/{r['total']:<5} ({r['acc']:.2f}%)")
         print(f"  {'':<10} source  {r['source_correct']:>5}/{r['source_total']:<5} ({r['source_acc']:.2f}%)")
         print(f"  {'':<10} MR      {r['mr_correct']:>5}/{r['mr_total']:<5} ({r['mr_acc']:.2f}%)")
+        msr = r.get("msr", {}).get("overall", {})
+        if msr:
+            print(
+                f"  {'':<10} MSR     {msr.get('satisfied', 0):>5}/"
+                f"{msr.get('total', 0):<5} ({msr.get('rate', 0):.2f}%)"
+            )
+        joint = r.get("joint_correctness", {}).get("overall", {})
+        if joint:
+            rate = joint.get("rate")
+            rate_text = f"{rate:.2f}%" if rate is not None else "N/A"
+            print(
+                f"  {'':<10} Joint   {joint.get('correct', 0):>5}/"
+                f"{joint.get('total', 0):<5} ({rate_text})"
+            )
 
     print(f"\n  Results saved to: {tests_merged_dir}")
     print()

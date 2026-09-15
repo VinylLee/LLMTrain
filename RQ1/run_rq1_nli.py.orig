@@ -23,7 +23,6 @@ NLI 模型在 4 个测试集（SNLI / MNLIm / MNLImm / SICK）的 Original 和 M
 __test__ = False
 
 import argparse
-import hashlib
 import json
 import os
 import subprocess
@@ -47,8 +46,8 @@ DEFAULT_OUTPUT_ROOT = RQ1_DIR / "output"
 
 STAGES = ["sample", "convert", "finetune", "test_original", "test_mr", "test_merged"]
 
-# 预采样数据集类型：sample 阶段直接复制对应 seed 文件（Z-Aug/DISCO 等对比数据均如此）
-PRESAMPLED_TYPES = frozenset({"zaug", "disco", "generic_llm_aug", "back_translation", "back_translation_nodeberta", "tailor2000", "tailor3500"})
+# 预采样数据集类型：sample 阶段直接复制对应 seed 文件（zaug/disco/TAILOR 混合集均如此）
+PRESAMPLED_TYPES = frozenset({"zaug", "disco", "tailor2000", "tailor3500"})
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -90,58 +89,6 @@ def mark_step(progress_file, progress, exp_name, step, status):
 
 def step_completed(progress, exp_name, step):
     return progress.get(exp_name, {}).get(step) == "completed"
-
-
-def _format_experiment_value(value, *, seed, name):
-    """Recursively expand dedicated-config placeholders."""
-    if isinstance(value, str):
-        return value.format(seed=seed, name=name)
-    if isinstance(value, list):
-        return [_format_experiment_value(item, seed=seed, name=name) for item in value]
-    if isinstance(value, dict):
-        return {
-            key: _format_experiment_value(item, seed=seed, name=name)
-            for key, item in value.items()
-        }
-    return value
-
-
-def _file_sha256(path):
-    digest = hashlib.sha256()
-    with open(path, "rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def validate_token_matching_artifacts(exp, ft_data_dir):
-    """Fail closed before training if token-matched data or audit drifted."""
-    if not exp.get("token_match"):
-        return True
-    report_path = ft_data_dir / "token_matching_report.json"
-    if not report_path.is_file():
-        print(f"    ⚠️  token matching 报告不存在: {report_path}")
-        return False
-    try:
-        report = load_json(report_path)
-    except (OSError, json.JSONDecodeError) as exc:
-        print(f"    ⚠️  token matching 报告不可读: {exc}")
-        return False
-    if report.get("status") != "pass" or report.get("experiment") != exp["name"]:
-        print("    ⚠️  token matching 报告状态或实验名不匹配")
-        return False
-    for split in ("train", "validation"):
-        output = report.get("splits", {}).get(split, {}).get("output", {})
-        path = Path(output.get("path", ""))
-        if not path.is_absolute():
-            path = PROJECT_ROOT / path
-        if not path.is_file() or _file_sha256(path) != output.get("sha256"):
-            print(f"    ⚠️  token-matched {split} 文件缺失或哈希不匹配: {path}")
-            return False
-        if abs(int(output.get("token_error", 10**9))) > int(report.get("tolerance", 0)):
-            print(f"    ⚠️  token-matched {split} 超出 token 容差")
-            return False
-    return True
 
 
 def run_cmd(cmd, desc, dry_run=False, cwd=None, env=None):
@@ -207,7 +154,7 @@ def build_experiment_list(config, args):
 
             # Resolve training data path per experiment type
             # exp_type key 与 training_data.<train_ds>.<exp_type> 同名
-            # (original / mr / zaug / disco / generic_llm_aug / tailor2000 / tailor3500)
+            # (original / mr / zaug / disco / tailor2000 / tailor3500)
             train_path = ds_cfg.get(exp_type, "")
 
             if not train_path:
@@ -219,19 +166,13 @@ def build_experiment_list(config, args):
             # MR instruction mode: 只有 MR 实验使用 pair_operation
             mr_mode = args.mr_instruction_mode if exp_type == "mr" else "none"
 
-            # Z-Aug / DISCO / Generic-LLM-Aug 等预组装对比数据：直接复制文件
+            # Z-Aug / DISCO / TAILOR 混合集: 预采样数据，跳过 sample 阶段（直接复制文件）
             skip_sample = (exp_type in PRESAMPLED_TYPES)
 
             for seed in args.seeds:
                 # Resolve zaug seed placeholder
                 resolved_train_path = train_path.replace("{seed}", str(seed))
-                default_name = f"rq1_{exp_type}_{train_ds}_seed{seed}"
-                name = ds_cfg.get("experiment_name_template", default_name).format(
-                    seed=seed,
-                    model=model_key,
-                    exp_type=exp_type,
-                    train_dataset=train_ds,
-                )
+                name = f"rq1_{exp_type}_{train_ds}_seed{seed}"
                 # MR 实验在非默认 pair_operation 模式下，名字追加 mode 后缀以区分消融变体
                 if exp_type == "mr" and mr_mode != "pair_operation":
                     name = f"{name}_{mr_mode}"
@@ -265,15 +206,6 @@ def build_experiment_list(config, args):
                     "eval_strategy": defaults.get("eval_strategy", "no"),
                     "save_steps": defaults.get("save_steps", 9999),
                     "save_total_limit": defaults.get("save_total_limit", 2),
-                    "write_split_manifest": _format_experiment_value(
-                        ds_cfg.get("write_split_manifest"), seed=seed, name=name
-                    ),
-                    "split_manifest": _format_experiment_value(
-                        ds_cfg.get("split_manifest"), seed=seed, name=name
-                    ),
-                    "token_match": _format_experiment_value(
-                        ds_cfg.get("token_match"), seed=seed, name=name
-                    ),
                 }
                 experiments.append(exp)
 
@@ -380,9 +312,6 @@ def save_experiment_meta(exp, model_cfg, output_root):
         "exp_type": exp["exp_type"],
         "train_dataset": exp["train_dataset"],
         "mr_instruction_mode": exp.get("mr_instruction_mode", "none"),
-        "split_manifest": exp.get("split_manifest"),
-        "write_split_manifest": exp.get("write_split_manifest"),
-        "token_match": exp.get("token_match"),
         "output_root": str(output_root),
         "conda_environment": "llmtrain310",
     }
@@ -431,17 +360,17 @@ def run_pipeline_stage(exp, model_cfg, output_root, progress, progress_file,
     # ── Stage 1: Sample ──────────────────────────────────────────────
     if stage == "sample":
         if exp.get("skip_sample"):
-            # 预组装对比数据：直接复制到 ft_datasets 目录
+            # Z-Aug 等预采样数据：直接复制到 ft_datasets 目录
             import shutil
             sampled_path = ft_data_dir / "sampled.json"
             if not args.dry_run:
                 ft_data_dir.mkdir(parents=True, exist_ok=True)
                 source_path = PROJECT_ROOT / exp["train_data"]
                 if not source_path.exists():
-                    print(f"    ⚠️  预组装训练数据不存在: {source_path}")
+                    print(f"    ⚠️  Z-Aug 数据不存在: {source_path}")
                     return False
                 shutil.copy2(source_path, sampled_path)
-                print(f"    ✅ 预组装训练数据已复制: {sampled_path} ({sampled_path.stat().st_size} bytes)")
+                print(f"    ✅ Z-Aug 预采样数据已复制: {sampled_path} ({sampled_path.stat().st_size} bytes)")
             else:
                 print(f"    ▶ [DRY-RUN] copy {exp['train_data']} -> {sampled_path}")
             return True
@@ -476,62 +405,13 @@ def run_pipeline_stage(exp, model_cfg, output_root, progress, progress_file,
             "--tokenizer-path", str(tokenizer_path),
             "--cutoff-len", str(exp.get("cutoff_len", 512)),
         ]
-        if exp.get("split_manifest"):
-            cmd.extend(["--split-manifest", exp["split_manifest"]])
-        if exp.get("write_split_manifest"):
-            cmd.extend(["--write-split-manifest", exp["write_split_manifest"]])
-
-        converted = run_cmd(
-            cmd, f"Convert {exp['name']}", args.dry_run,
-            cwd=PROJECT_ROOT, env=env,
-        )
-        if not converted or not exp.get("token_match"):
-            return converted
-
-        token_cfg = exp["token_match"]
-        token_cmd = [
-            sys.executable, str(SCRIPTS_DIR / "upsample_nli_to_token_budget.py"),
-            "--experiment", exp["name"],
-            "--base-train", str(ft_data_dir / "full_train.json"),
-            "--base-validation", str(ft_data_dir / "full_val.json"),
-            "--reference-train", token_cfg["reference_train"],
-            "--reference-validation", token_cfg["reference_validation"],
-            "--tokenizer-path", str(tokenizer_path),
-            "--seed", str(exp["seed"]),
-            "--tolerance", str(token_cfg.get("tolerance", 32)),
-            "--max-repeat", str(token_cfg.get("max_repeat", 4)),
-            "--max-label-drift-pp", str(token_cfg.get("max_label_drift_pp", 1.0)),
-            "--output-train", str(ft_data_dir / "token_matched_train.json"),
-            "--output-validation", str(ft_data_dir / "token_matched_val.json"),
-            "--report", str(ft_data_dir / "token_matching_report.json"),
-        ]
-        expected = token_cfg.get("expected_reference_tokens", {})
-
-        def expected_for_seed(split):
-            value = expected.get(split)
-            if isinstance(value, dict):
-                value = value.get(str(exp["seed"]))
-            return value
-
-        expected_train = expected_for_seed("train")
-        expected_validation = expected_for_seed("validation")
-        if expected_train is not None:
-            token_cmd.extend(["--expected-train-tokens", str(expected_train)])
-        if expected_validation is not None:
-            token_cmd.extend(["--expected-validation-tokens", str(expected_validation)])
-        return run_cmd(
-            token_cmd, f"Token-match {exp['name']}", args.dry_run,
-            cwd=PROJECT_ROOT, env=env,
-        )
+        return run_cmd(cmd, f"Convert {exp['name']}", args.dry_run, cwd=PROJECT_ROOT, env=env)
 
     # ── Stage 3: Finetune ────────────────────────────────────────────
     if stage == "finetune":
         conversion_report = ft_data_dir / "conversion_report.json"
         if not args.dry_run and not conversion_report.exists():
             print(f"    ⚠️  conversion_report.json 不存在: {conversion_report}，跳过 finetune")
-            return False
-        if not args.dry_run and not validate_token_matching_artifacts(exp, ft_data_dir):
-            print("    ⚠️  token matching 预训练硬检查失败，拒绝启动训练")
             return False
 
         yaml_content = build_yaml(exp, model_name, model_cfg["template"], output_root)
@@ -985,14 +865,14 @@ def generate_summary(output_root, experiments, model_key, seeds):
     for metric, metric_label, metric_index in metric_specs:
         lines.append(f"### {metric_label}")
         lines.append("")
-        # Header: Train DS | Original | MR | Z-Aug | DISCO | Generic-LLM-Aug
-        lines.append("| Train DS | Original | MR | Z-Aug | DISCO | Generic-LLM-Aug | MR-Orig Δ | Z-Aug-Orig Δ | DISCO-Orig Δ | Generic-LLM-Aug-Orig Δ |")
-        lines.append("|" + "---|" * 10 + "")
+        # Header: Train DS | Original | MR | Z-Aug | DISCO
+        lines.append("| Train DS | Original | MR | Z-Aug | DISCO | MR-Orig Δ | Z-Aug-Orig Δ | DISCO-Orig Δ |")
+        lines.append("|" + "---|" * 9 + "")
 
         for train_ds in sorted(set(exp["train_dataset"] for exp in experiments if exp["train_dataset"] is not None)):
             row = f"| {train_ds} |"
             orig_vals = []
-            for etype in ["original", "mr", "zaug", "disco", "generic_llm_aug"]:
+            for etype in ["original", "mr", "zaug", "disco"]:
                 key = (etype, train_ds)
                 acc_pairs = groups.get(key, {}).get("merged", {}).get(train_ds, [])
                 if not acc_pairs:
@@ -1052,13 +932,6 @@ def generate_summary(output_root, experiments, model_key, seeds):
                 dc_mean = sum(orig_vals[3]) / len(orig_vals[3])
                 d3 = dc_mean - o_mean
                 row += f" {'+' if d3 >= 0 else ''}{d3:.2f}% |"
-            else:
-                row += " — |"
-            if len(orig_vals) > 4 and orig_vals[0] and orig_vals[4]:  # generic-LLM-Aug and original both present
-                o_mean = sum(orig_vals[0]) / len(orig_vals[0])
-                generic_mean = sum(orig_vals[4]) / len(orig_vals[4])
-                generic_delta = generic_mean - o_mean
-                row += f" {'+' if generic_delta >= 0 else ''}{generic_delta:.2f}% |"
             else:
                 row += " — |"
             lines.append(row)
@@ -1172,8 +1045,7 @@ def parse_args():
     p.add_argument("--model", required=True,
                    help="模型 key（如 gemma-3-4b-it, llama-3.2-3b）")
     p.add_argument("--experiment", nargs="+", default=["original", "mr"],
-                   choices=["original", "mr", "zaug", "disco", "generic_llm_aug", "back_translation",
-                            "back_translation_nodeberta", "zeroshot",
+                   choices=["original", "mr", "zaug", "disco", "zeroshot",
                             "tailor2000", "tailor3500"],
                    help="实验类型 (default: original mr)")
     p.add_argument("--train-data", nargs="+", default=None,

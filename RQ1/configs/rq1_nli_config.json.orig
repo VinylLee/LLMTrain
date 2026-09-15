@@ -15,7 +15,6 @@
           "mr": "data/nli/mettrain/snli_lr0.0037_gemma-3-4b-it-qat/augmented_data.json",
           "zaug": "data/nli/zaug/rq1_snli/snli_zaug_sample_s{seed}.jsonl",
           "disco": "data/nli/disco/disco_snli/disco_seed{seed}.jsonl",
-          "generic_llm_aug": "data/nli/generic_llm_aug/training/snli_generic_llm_aug_5340_seed{seed}.jsonl",
           "tailor2000": "data/nli/TAILOR/rq1_snli_2000original/snli_tailor_sample_s{seed}.jsonl",
           "back_translation": "data/nli/back_translation/snli_mettrain_gemma_v2_multipivot_5340_combined_seed{seed}.jsonl",
           "back_translation_nodeberta": "data/nli/back_translation/none_DeBERTa/snli_mettrain_gemma_v2_nodeberta_3307_combined_seed{seed}.jsonl",

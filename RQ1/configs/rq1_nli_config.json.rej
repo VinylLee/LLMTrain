@@ -1,0 +1,14 @@
+--- RQ1/configs/rq1_nli_config.json
++++ RQ1/configs/rq1_nli_config.json
+@@ -15,9 +15,10 @@
+           "mr": "data/nli/mettrain/snli_lr0.0037_gemma-3-4b-it-qat/augmented_data.json",
+           "zaug": "data/nli/zaug/rq1_snli/snli_zaug_sample_s{seed}.jsonl",
+           "disco": "data/nli/disco/disco_snli/disco_seed{seed}.jsonl",
++          "back_translation": "data/nli/back_translation/snli_mettrain_gemma_v2_multipivot_5340_combined_seed{seed}.jsonl",
+           "tailor2000": "data/nli/TAILOR/rq1_snli_2000original/snli_tailor_sample_s{seed}.jsonl",
+           "tailor3500": "data/nli/TAILOR/rq1_snli_3500original/snli_tailor_sample_s{seed}.jsonl",
+           "target": 5340,
+-          "_note": "TAILOR rq1_snli_2000original 与 rq1_snli_3500original 为两个不同的混合数据集：5340 行 = 2000/3500 条真实 SNLI original + 其余 Tailor swap-core generated(neutral)。"
++          "_note": "back_translation 是已按 seed 准备好的 5340 行 SNLI 合并训练集，sample 阶段直接复制；TAILOR rq1_snli_2000original 与 rq1_snli_3500original 为两个不同的混合数据集。"
+ 
+ 

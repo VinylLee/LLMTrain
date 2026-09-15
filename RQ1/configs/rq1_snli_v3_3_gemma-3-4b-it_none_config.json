@@ -1,0 +1,55 @@
+{
+  "_schema_version": 1,
+  "_description": "RQ1 isolated SNLI v3.3 Gemma-3-4B-IT experiment with MR instruction mode none.",
+  "models": {
+    "gemma-3-4b-it": {
+      "hub_id": "google/gemma-3-4b-it",
+      "local_path": "models/google/gemma-3-4b-it",
+      "local_tokenizer_path": "models/google/gemma-3-4b-it",
+      "template": "gemma",
+      "cuda": "0",
+      "training_data": {
+        "snli_v3_3_gemma-3-4b-it": {
+          "mr": "data/nli/mettrain/snli_lr0.0037_gemma-3-4b-it-qat-v3_3/augmented_data_all_label_mrs_v3_3_full.json",
+          "target": 5340
+        }
+      }
+    }
+  },
+  "test_sets": {
+    "original": {
+      "snli": "data/nli/original_dataset/snli/test.json",
+      "mnlim": "data/nli/original_dataset/mnlim/test.json",
+      "mnlimm": "data/nli/original_dataset/mnlimm/test.json",
+      "sick": "data/nli/original_dataset/sick/test.json"
+    },
+    "mr": {
+      "snli": "data/nli/MR_testing/snli_test_MR",
+      "mnlim": "data/nli/MR_testing/mnlim_test_MR",
+      "mnlimm": "data/nli/MR_testing/mnlimm_test_MR",
+      "sick": "data/nli/MR_testing/sick_test_MR"
+    }
+  },
+  "experiment_defaults": {
+    "ft_params": {
+      "lr": 0.0003,
+      "epochs": 3.0,
+      "rank": 8,
+      "batch": 4,
+      "grad_accum": 8
+    },
+    "task_type": "nli",
+    "val_ratio": 0.05,
+    "cutoff_len": 512,
+    "eval_strategy": "no",
+    "save_steps": 9999,
+    "save_total_limit": 2,
+    "test_batch_size": 32,
+    "max_new_tokens": 10
+  },
+  "default_seeds": [42, 43, 44],
+  "default_train_datasets": ["snli_v3_3_gemma-3-4b-it"],
+  "default_experiment_types": ["mr"],
+  "default_mr_instruction_mode": "none",
+  "default_test_mode": "merged"
+}

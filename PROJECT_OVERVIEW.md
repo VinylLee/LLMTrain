@@ -15,6 +15,12 @@
 
 ## 2. 总体数据流
 
+### 2.0 Generic LLM augmentation 对照
+
+`scripts/generate_generic_llm_aug.py` 实现 RQ1 的 `generic-LLM-Aug` 数据生成对照（当前正式训练文件中的 prompt version 为 `generic_nli_v6`）。它从原始三分类 NLI 示例中生成普通场景的全新 premise–hypothesis，只向生成模型提供普通 NLI 示例、目标标签和可复现的场景提示，不提供 MR 名称、operation description、relation effect 或 source–follow-up 结构；prompt 要求单一可验证关系并分别约束 entailment、neutral、contradiction 的逻辑边界。默认生成模型为 `google/gemma-3-4b-it`，并优先使用项目中的本地缓存。
+
+输出 JSONL 可直接按 Z-Aug/DISCO 相同的普通 NLI SFT 格式转换；转换时内部标记为 `mr_instruction_mode=none`，但不提供任何 MR instruction。文件保留 source index、生成 seed 与 prompt version 等 provenance；伴随的 `*.report.json` 记录文件哈希、标签分布、生成参数、自动拒绝原因和完整性状态。`--dry-run` 不加载模型或写文件，`--resume` 支持断点续跑。该对照用于检验一般合成数据能否解释 standard task performance 与 MR compliance 的变化；它不是 MR 数据，不能按 source–follow-up pair 或 MR specification condition 汇总。
+
 ### 2.1 当前系统化 LoRA 实验
 
 ```text
@@ -192,7 +198,13 @@ python scripts/run_batch_experiments.py \
 - 二分类模型测试三分类数据时，将 neutral/contradiction 折叠为 not_entailment；
 - Original 测试加载单一规范数据文件；
 - MR 测试将某数据集目录下所有 `.json` 文件合并后整体评估；
+- merged 测试在同一 JSONL 中按 `pair_id` 配对 source/follow-up，统一计算 source accuracy、follow-up accuracy、MSR 与 joint correctness；
 - 输出每条样本的丰富元数据，包括 `dataset`、`test_type`、`mr_type`、`pair_id`、`premise`、`hypothesis`、`gold`、`pred` 和 `correct`。
+
+配对指标由轻量模块 `scripts/metamorphic_metrics.py` 计算，不依赖模型框架。Joint correctness
+以每条具有唯一 source 的 follow-up 为评价单位，只有 source 与 follow-up 均预测正确才计为正确；
+source-only group 不进入分母，缺失或多 source 的异常配对保留诊断计数。保存后的 merged JSONL
+可直接重算这些指标，无需重新推理。
 
 结果位置：
 
@@ -200,6 +212,7 @@ python scripts/run_batch_experiments.py \
 output/experiments/<experiment>_seed<seed>/tests/
   original/{mnlim,mnlimm,sick,snli}.jsonl
   mr/{mnlim,mnlimm,sick,snli}.jsonl
+  merged/{mnlim,mnlimm,sick,snli}.jsonl
 ```
 
 每条结果示例：
@@ -353,7 +366,7 @@ Gemma 具体准确率见 `output/experiments/gemma3_4b_nli/RESULTS.md`；Llama �
 
 三个核心模式已完成实际 20-step smoke，均成功执行 eval、保存 checkpoint/adapter，并记录 `global_step=20`。`none`、`pair_operation`、`shuffled_operation` 的 train/eval loss 分别为 1.2993/0.1170、0.9316/0.1133、0.9678/0.1332；这些数值只用于 pipeline health，不能作模式优劣结论。`none` adapter 在相同 8 条 MNLI Original 上的 batch 1/32 贪婪预测 8/8 一致，两份 JSONL 逐字节相同。迁移中发现并修复 dataset registry 远端绝对路径、Windows CRLF 转换哈希和 Transformers 5 `BatchEncoding` 单条推理兼容问题；修复后 Stage 2 自动检查恢复 125/125。旧失败现场保留，成功 smoke 报告见 ignored 的 `artifacts/mrinstr_validation/stage3_exploratory_smoke_report.{json,md}`。Stage 4 与任何确认性结论仍禁止。
 
-独立 full 配置 `experiments/configs/experiments_config_mrinstr_exploratory_full_seed42.json` 进一步把同一三个 mode 限制为 seed 42、最多 3 epochs，并固定隔离输出根 `output/experiments/gemma3_4b_mrinstr_exploratory_full_seed42_v1/`。三组 393/393 steps 均已完成，最终 eval loss 为 `none=0.09847`、`pair_operation=0.16866`、`shuffled_operation=0.13062`。`none` 首次运行在 340 步后因外层监控超时中断，随后由 runner 从完整 `checkpoint-300` 恢复并完成；其 `train_results.json` 的 runtime/loss 只覆盖恢复段，不能与另外两组直接比较。三组均观察到中期 eval 优于最终 eval，但 `save_total_limit=2` 已滚动删除中期最佳 checkpoint，因此当前权威可用产物是最终 3-epoch adapter，不能事后把中期日志最佳值当作可加载模型。用户要求在此暂停：Stage 4 未启动；后续 GPU 训练/推理/评测转到远程服务器执行，本机继续负责源码、审计、结果分析和实验决策。GPU 执行交接见 `GPU_EXECUTION_HANDOFF.md`。
+独立 full 配置 `experiments/configs/experiments_config_mrinstr_exploratory_full_seed42.json` 进一步把同一三个 mode 限制为 seed 42、最多 3 epochs，并固定隔离输出根 `output/experiments/gemma3_4b_mrinstr_exploratory_full_seed42_v1/`。三组 393/393 steps 均已完成，最终 eval loss 为 `none=0.09847`、`pair_operation=0.16866`、`shuffled_operation=0.13062`。`none` 首次运行在 340 步后因外层监控超时中断，随后由 runner 从完整 `checkpoint-300` 恢复并完成；其 `train_results.json` 的 runtime/loss 只覆盖恢复段，不能与另外两组直接比较。三组均观察到中期 eval 优于最终 eval，但 `save_total_limit=2` 已滚动删除中期最佳 checkpoint，因此当前权威可用产物是最终 3-epoch adapter，不能事后把中期日志最佳值当作可加载模型。旧 MR-as-Instruction Stage 4 仍未启动；用户现已确认当前主机就是 GPU 服务器，并授权在本机执行新的 SNLI v3.3 / `gemma-3-4b-it` / `none` 三 seed 实验。新的 generic-LLM-Aug 对比实验已完成 sample/convert、三 seed GPU 微调和四数据集 merged 评测，权威结果位于 `RQ1/output/generic_llm_aug_gemma3_4b/`；MR-as-Instruction Stage 4 仍保持暂停。
 
 `scripts/prepare_mrinstr_annotation.py` 将人工协议物化为可复现的双人独立复核批次。它从 cohort 和实际 Gemma tokenizer 重算 1114 条 blocker 的 stable sample key、完整 pair context、token 长度、来源签名和同 pair sibling context；为每位标注者独立打乱顺序，并按每 100 条唯一任务插入 5 条稳定性复测。当前 `artifacts/mrinstr_annotation/` 已生成 `annotation_batch_manifest.json` 与两份未填写 JSONL 模板：每份 1114 条唯一任务、1174 个展示项、12 个批次、60 条复测。生成器默认只校验已存在的完整批次，拒绝覆盖部分或已有标注文件；模板不代表人工审查已经完成。
 

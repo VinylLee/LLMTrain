@@ -1,0 +1,2 @@
+# RQ1 Original-SNLI controls hourly read-only status monitor
+5 * * * * /usr/bin/python3 /home/ubuntu/LLMTrain/LLMTrain/RQ1/scripts/monitor_rq1_original_controls.py >/dev/null 2>&1

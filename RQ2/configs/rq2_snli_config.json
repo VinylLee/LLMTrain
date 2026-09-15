@@ -1,0 +1,39 @@
+{
+  "_schema_version": 1,
+  "_description": "RQ2 controlled SNLI MR-information representation experiment",
+  "model": {
+    "key": "gemma-3-4b-it",
+    "hub_id": "google/gemma-3-4b-it",
+    "local_path": "models/google/gemma-3-4b-it",
+    "template": "gemma",
+    "cuda": "0"
+  },
+  "data": {
+    "training_input": "data/nli/mettrain/snli_lr0.0037_gemma-3-4b-it-qat/augmented_data.json",
+    "merged_test_input": "data/nli/mr_test_data_merged/snli.jsonl",
+    "target_samples": 5340,
+    "val_ratio": 0.05,
+    "cutoff_len": 512
+  },
+  "modes": [
+    "none",
+    "operation_only",
+    "pair_only",
+    "pair_operation",
+    "shuffled_operation"
+  ],
+  "seeds": [42, 43, 44],
+  "training": {
+    "learning_rate": 0.0003,
+    "epochs": 3.0,
+    "rank": 8,
+    "batch": 4,
+    "grad_accum": 8,
+    "save_steps": 9999,
+    "save_total_limit": 2,
+    "test_batch_size": 32,
+    "max_new_tokens": 10
+  },
+  "output_root": "RQ2/output/gemma3_4b_nli",
+  "data_root": "RQ2/data"
+}

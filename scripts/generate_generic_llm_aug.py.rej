@@ -1,0 +1,14 @@
+--- scripts/generate_generic_llm_aug.py
++++ scripts/generate_generic_llm_aug.py
+@@ -826,3 +826,11 @@
+                 semantic_verifier = factory(
+                     model_reference=semantic_verifier_reference,
+                     tokenizer_reference=verifier_tokenizer_reference,
++                    device=args.device,
++                    dtype=args.dtype,
++                    offline=args.offline,
++                    trust_remote_code=args.trust_remote_code,
++                    max_new_tokens=args.max_new_tokens,
++                    temperature=0.0,
++                    top_p=1.0,
++                )

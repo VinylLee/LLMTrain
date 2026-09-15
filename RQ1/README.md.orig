@@ -101,8 +101,6 @@ sample → convert → finetune → test_original → test_mr
 | 模式 | 说明 | 适用场景 |
 |---|---|---|
 | `none` | 纯 NLI instruction | Original 实验默认 |
-`generic_llm_aug` 是 SNLI 专用的普通合成数据对比条件，读取
-`data/nli/generic_llm_aug/training/snli_generic_llm_aug_5340_seed{seed}.jsonl`。它和 Z-Aug/DISCO 一样不经过二次抽样，转换为普通 NLI SFT 格式；`none` 只是内部兼容标记，不包含 MR instruction、reference sample 或 transformation description。
 | `pair_operation` | reference sample + 操作描述 | MR 实验默认（RQ1 baseline） |
 
 `back_translation` 是 SNLI 专用的预先构建训练条件，读取

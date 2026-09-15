@@ -15,6 +15,7 @@ from collections import Counter
 from transformers import AutoModelForCausalLM, AutoTokenizer, logging as hf_logging
 from peft import PeftModel
 from inference_utils import decode_generated_continuations, unpack_generation_inputs
+from metamorphic_metrics import compute_joint_correctness, compute_msr
 
 # 抑制烦人的生成参数警告
 os.environ["TRANSFORMERS_VERBOSITY"] = "error"
@@ -321,88 +322,6 @@ def collect_mr_samples(mr_dir):
     return all_samples, mr_types
 
 
-def compute_msr(results):
-    """计算 Metamorphic Satisfaction Rate (MSR)。
-
-    基于 pair_id 分组 source 和 follow-up 预测，逐对检查 MR 输出关系是否满足。
-
-    Args:
-        results: list[dict], test_dataset() 返回的逐条结果（含 pred/gold/mr_type/is_source/pair_id）。
-
-    Returns:
-        dict: {
-            "overall": {"satisfied": int, "total": int, "rate": float},
-            "per_type": {"inv": {...}, "flip": {...}, "neutral": {...}},
-        }
-    """
-    # Step 1: Group by pair_id, separate source from follow-ups
-    pairs = {}
-    for row in results:
-        pid = row.get("pair_id", "")
-        if pid == "":
-            continue
-        pid = int(pid)
-        if pid not in pairs:
-            pairs[pid] = {"source": None, "followups": []}
-        if row.get("is_source"):
-            pairs[pid]["source"] = row
-        else:
-            pairs[pid]["followups"].append(row)
-
-    # Step 2: Count satisfactions per mr_type
-    counters = {
-        "overall": {"satisfied": 0, "total": 0},
-    }
-    for mr_type in ("inv", "flip", "neutral"):
-        counters[mr_type] = {"satisfied": 0, "total": 0}
-
-    for pid, pair_data in pairs.items():
-        src = pair_data["source"]
-        if src is None:
-            continue
-        src_pred = src.get("pred", "")
-
-        for fup in pair_data["followups"]:
-            mr = fup.get("mr_type", "")
-            fup_pred = fup.get("pred", "")
-            satisfied = False
-
-            if mr == "inv":
-                # Invariant: output must be identical
-                satisfied = (fup_pred == src_pred)
-
-            elif mr == "flip":
-                # entailment <-> contradiction; neutral stays neutral
-                if src_pred == "entailment":
-                    satisfied = (fup_pred == "contradiction")
-                elif src_pred == "contradiction":
-                    satisfied = (fup_pred == "entailment")
-                elif src_pred == "neutral":
-                    satisfied = (fup_pred == "neutral")
-
-            elif mr == "neutral":
-                # Follow-up must be neutral regardless of source
-                satisfied = (fup_pred == "neutral")
-
-            # Increment counters
-            counters["overall"]["total"] += 1
-            if satisfied:
-                counters["overall"]["satisfied"] += 1
-
-            if mr in counters:
-                counters[mr]["total"] += 1
-                if satisfied:
-                    counters[mr]["satisfied"] += 1
-
-    # Step 3: Compute rates
-    for key in counters:
-        t = counters[key]["total"]
-        s = counters[key]["satisfied"]
-        counters[key]["rate"] = (s / t * 100) if t > 0 else 0.0
-
-    return counters
-
-
 def main():
     configure_console_encoding()
     os.chdir(WORK_DIR)
@@ -418,7 +337,7 @@ def main():
     parser.add_argument("--skip-mr", action="store_true", help="跳过 MR 测试")
     parser.add_argument("--merged", action="store_true",
                         help="使用 Merged 测试数据（单一 JSONL，source+MR 混合，is_source 字段区分）。"
-                             "计算 source accuracy、MR accuracy 和 MSR。")
+                             "计算 source accuracy、MR accuracy、MSR 和 joint correctness。")
     parser.add_argument("--merged-path", default=None,
                         help="覆盖 Merged 数据目录路径 (default: data/nli/mr_test_data_merged)")
     parser.add_argument("--model-task", default=None, choices=["binary", "3class"],
@@ -559,6 +478,9 @@ def main():
             # 计算 MSR
             merged_results = load_jsonl_samples(out_path) if out_path.exists() else []
             msr = compute_msr(merged_results) if merged_results else {}
+            joint_correctness = (
+                compute_joint_correctness(merged_results) if merged_results else {}
+            )
 
             print(f"  ✅ {ds_name}: {correct}/{total} = {acc:.2f}%  ({elapsed:.0f}s)")
             print(f"     Source  : {source_correct}/{source_total} = {source_acc:.2f}%")
@@ -570,12 +492,21 @@ def main():
                     m = msr.get(mr_type, {})
                     if m.get("total", 0) > 0:
                         print(f"       {mr_type:<8}: {m.get('satisfied', 0)}/{m.get('total', 0)} = {m.get('rate', 0):.2f}%")
+            if joint_correctness:
+                overall = joint_correctness.get("overall", {})
+                rate = overall.get("rate")
+                rate_text = f"{rate:.2f}%" if rate is not None else "N/A"
+                print(
+                    f"     Joint   : {overall.get('correct', 0)}/"
+                    f"{overall.get('total', 0)} = {rate_text}"
+                )
 
             all_results[f"merged/{ds_name}"] = {
                 "total": total, "correct": correct, "acc": acc,
                 "source_total": source_total, "source_correct": source_correct, "source_acc": source_acc,
                 "mr_total": mr_total, "mr_correct": mr_correct, "mr_acc": mr_acc,
                 "msr": msr,
+                "joint_correctness": joint_correctness,
             }
 
     # === 结果汇总 ===
@@ -588,7 +519,7 @@ def main():
         if cat_results:
             print(f"\n  {category.upper().rstrip('/')}:")
             if category == "merged/":
-                # Merged 汇总：source acc, MR acc, MSR
+                # Merged 汇总：source acc, MR acc, MSR, joint correctness
                 for ds_key in sorted(cat_results.keys()):
                     r = cat_results[ds_key]
                     ds_short = ds_key.split("/")[1]
@@ -599,6 +530,14 @@ def main():
                     overall = msr.get("overall", {})
                     if overall:
                         print(f"    {'':<10} MSR     {overall.get('satisfied', 0):>4}/{overall.get('total', 0):<5} ({overall.get('rate', 0):.2f}%)")
+                    joint = r.get("joint_correctness", {}).get("overall", {})
+                    if joint:
+                        rate = joint.get("rate")
+                        rate_text = f"{rate:.2f}%" if rate is not None else "N/A"
+                        print(
+                            f"    {'':<10} Joint   {joint.get('correct', 0):>4}/"
+                            f"{joint.get('total', 0):<5} ({rate_text})"
+                        )
             else:
                 for ds_key in sorted(cat_results.keys()):
                     r = cat_results[ds_key]

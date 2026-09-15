@@ -1,0 +1,3 @@
+# RQ2 seed 43/44 hourly status monitor
+0 * * * * /usr/bin/env bash /home/ubuntu/LLMTrain/LLMTrain/RQ2/scripts/monitor_rq2_seeds.sh >/dev/null 2>&1
+
