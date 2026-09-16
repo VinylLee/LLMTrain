@@ -13,11 +13,8 @@
 > `RQ2/MR_RELATION_AUDIT.md`（v3 关系证据）、
 > `RQ2/MR_RELATION_AUDIT_V4.md`（v4 关系证据，含 `flip` 收窄为 `E→C` 的理由）
 
-> ⚠️ **实现状态**：本文描述的是**已实现**的 v4（8 core + 3 control + 1 diagnostic = 12 个 mode）。
-> 之后提出的两个**尚未实现**的对照——`pair_wrong_operation_relation_matched` 与
-> `pair_wrong_relation`——见 `.research/LLMTrain/RQ2_v4_final_experimental_configurations_zh_code_preserved.md`
-> （该文件位于 `.gitignore` 的 `.research/` 下，不进版本库，但可直接读取）。在它们落地之前，
-> 不要假设 registry 里已经存在这两个 mode。
+> **实现状态**：本文描述的是**已实现**的 v4（8 core + 5 control + 1 diagnostic = 14 个 mode）。
+> 两个 strict semantic controls 的可行性与质量审计见第六节及各 conversion report。
 
 ---
 
@@ -137,7 +134,9 @@ v4 换成 `Paired source input` 是因为 `sample` 容易被模型读成 few-sho
 | `pair_relation` | 1 | 0 | 1 | 0 | source_grounded | core | pair/rel=correct |
 | `full_specification` | 1 | 1 | 1 | 0 | source_grounded | core | 全部 correct |
 | `pair_shuffled_operation` | 1 | 1 | 0 | 0 | source_grounded | control | op=**shuffled** |
+| `pair_wrong_operation_relation_matched` | 1 | 1 | 0 | 0 | source_grounded | control | op=**wrong_relation_matched**；同 relation kind + arity，trace/text 必须不同 |
 | `pair_shuffled_relation` | 1 | 0 | 1 | 0 | source_grounded | control | rel=**shuffled** |
+| `pair_wrong_relation` | 1 | 0 | 1 | 0 | source_grounded | control | rel=**wrong**；100% 不同 kind/text |
 | `mismatched_pair` | 1 | 0 | 0 | 0 | source_grounded | control | pair=**mismatched** |
 | `full_oracle` | 1 | 1 | 1 | **1** | source_grounded | diagnostic | 全部 correct + L=1 |
 
@@ -376,6 +375,7 @@ The follow-up input was derived from its source input through the following orde
 
 * **ungrounded Relation 的 shortcut**：`E→C` / `E→N` 的文本在 `P=0` 时几乎等于直接说出 follow-up label。v4 cohort 中这类行有 **2851 / 3307（86%）**，由 `relation_shortcut_risk_count` 记录。因此 `relation_only` / `operation_relation` 只作为 **ungrounded metadata diagnostic**；Relation 的**主要结论必须**来自 `pair_relation` / `full_specification` / `pair_shuffled_relation`。把文本写模糊来"修复"会破坏 specification 本身的含义，所以选择如实上报。
 * **`pair_shuffled_relation` 只能做到 ~84% derange**：`entailment_to_neutral` 占训练集 augmented 行的 58%，三分类下 Hall 条件不成立，理论上限 `2·max − total` = 504/3170（15.9% 的行保持自己的 kind）。marginals 保持匹配，但这段行的 Relation 控制是 inert 的，已在 `matched_control_audit` 中报告。
+* **`pair_wrong_operation_relation_matched` 是 strict semantic control**：在每个 `(relation_kind, arity)` stratum 内选择 trace 与 rendered text 都不同的 donor；donor 可被重用，因为该 control 不做 marginal-preserving permutation。没有合法 donor 的 row 标记为 unavailable，绝不跨 relation family/arity fallback；正式转换默认遇到 unavailable 直接 fail，可在审计后显式启用 partial coverage。
 
 ---
 
@@ -384,7 +384,9 @@ The follow-up input was derived from its source input through the following orde
 | control | 做法 | 回答什么问题 |
 |---|---|---|
 | `pair_shuffled_operation` | 按 `operation_trace_id` 做 **matched derangement**：先同 arity、再尽量同 relation kind、trace 必须不同、seed 决定顺序 | 模型是否用到了**正确的** grounded Operation 语义 |
+| `pair_wrong_operation_relation_matched` | 同 `(relation_kind, arity)` 内取 **strict wrong Operation** donor；trace 与 rendered text 均不同，donor 可重用 | 控制 Relation-family prior 后，具体 Operation trace 的真实性是否重要 |
 | `pair_shuffled_relation` | 按 relation **kind** 重排，保持 kind marginals | 正确的 Relation 语义内容是否有价值 |
+| `pair_wrong_relation` | 用固定 cycle 将每个 relation kind 映射到另一个 kind；不改变 Pair、target 或 input | Relation payload 错误时模型是否受影响；保证 100% semantic mismatch |
 | `mismatched_pair` | source 换成**另一个 group** 的 source；双输入格式与 token 预算保持可比 | 正确的 source–follow-up 对应关系本身是否重要（而不只是"多了一个输入"） |
 
 `pair_shuffled_operation` 的实测质量（v4 cohort，seed 42）：
@@ -407,6 +409,7 @@ The follow-up input was derived from its source input through the following orde
 * **Operation** = 由 `component_mrs` 展开的**有序** trace（`1. … 2. …`），只回答"输入被怎么改了"，绝不回答"输出该是什么"。
 * **Relation** = `must` 形式的**输出约束**，只回答"valid pair 的输出必须满足什么"，按 kind 共享文本。
 * **Label** = 只出现在 `full_oracle`，用于诊断 source-label anchoring。
+* **Strict controls** = `pair_wrong_operation_relation_matched` 控制 kind/arity 后的 Operation 错误，`pair_wrong_relation` 保证 Relation 100% 错误；两者都不改变当前 Pair、target 或 source label。
 * **数据集** = 训练用 `…-v3_3/augmented_data_all_label_mrs_v3_3_full.json`（5340 行，486 composite 100% 带有序 provenance），测试用 `data/nli/mr_test_data_merged/snli.jsonl`（22548 行）。
 
 ---
@@ -424,9 +427,12 @@ python scripts/inspect_rq2_instructions.py \
 python scripts/audit_rq2_v4_provenance.py \
   --input data/nli/mettrain/snli_lr0.0037_gemma-3-4b-it-qat-v3_3/augmented_data_all_label_mrs_v3_3_full.json
 
-# 正式 v4 实验（8 核心条件 x 3 seeds）
+# 正式 v4 实验（8 核心条件 x 3 seeds；先完成 strict-control audit）
 python RQ2/run_rq2_snli.py --config RQ2/configs/rq2_snli_config_v4.json \
   --seeds 42 43 44 \
   --modes none operation_only relation_only operation_relation \
           pair_only pair_operation pair_relation full_specification
+
+# 全部 14 个 mode（5 controls + 1 diagnostic；42 次 fine-tune）
+python RQ2/run_rq2_snli.py --config RQ2/configs/rq2_snli_config_v4.json --seeds 42 43 44
 ```

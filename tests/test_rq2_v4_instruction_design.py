@@ -31,6 +31,7 @@ from convert_nli_to_ft import (  # noqa: E402
     build_pair_groups,
     convert_to_alpaca,
     select_matched_shuffled_operation_donors_for,
+    select_relation_matched_wrong_operation_donors_for,
     select_shuffled_relation_kinds_v4,
     sort_samples_by_stable_key,
 )
@@ -51,6 +52,7 @@ from mr_instruction_design import (  # noqa: E402
     render_operation_v4,
     render_relation_v4,
     resolve_operation_trace_v4,
+    wrong_relation_kind_v4,
 )
 
 V4 = 4
@@ -144,6 +146,34 @@ def converted(mode, require_provenance=False, seed=1041):
         require_composite_provenance=require_provenance,
         template_version=V4,
     )
+
+
+def strict_control_dataset():
+    """Build two distinct traces in each arity-1 relation stratum."""
+    rows = make_dataset()
+    extra = [
+        (300, "voice_switch", 0, "A source 300.", "A follow-up 300."),
+        (301, "antonym_substitution", 2, "A source 301.", "A follow-up 301."),
+        (302, "conditional_clause", 1, "A source 302.", "A follow-up 302."),
+    ]
+    for pair_id, mr_id, label, premise, hypothesis in extra:
+        rows.append(dict(SOURCE, pair_id=pair_id, premise=premise, hypothesis=f"source {pair_id}"))
+        rows.append({
+            "premise": premise, "hypothesis": hypothesis, "label": label,
+            "pair_id": pair_id, "mr_id": mr_id, "mr_type": {
+                "voice_switch": "inv", "antonym_substitution": "flip",
+                "conditional_clause": "neutral",
+            }[mr_id], "component_mrs": None,
+        })
+    rows = sort_samples_by_stable_key(rows)
+    groups = build_pair_groups(rows)
+    for group in groups:
+        for sample in group["samples"]:
+            sample["_group_key"] = group["group_key"]
+    original_map, missing = build_original_map(groups)
+    assert not missing, missing
+    donors, meta = select_relation_matched_wrong_operation_donors_for(rows, 1041)
+    return rows, original_map, donors, meta
 
 
 # ============================================================
@@ -402,6 +432,112 @@ def test_shuffled_relation_control_preserves_targets():
     shuffled, _ = converted("pair_shuffled_relation")
     assert [r["output"] for r in plain] == [r["output"] for r in shuffled]
     assert any(a["instruction"] != b["instruction"] for a, b in zip(plain, shuffled))
+
+
+# ============================================================
+# Strict semantic controls
+# ============================================================
+def test_new_control_registry_metadata_is_explicit():
+    op_meta = mode_design_meta("pair_wrong_operation_relation_matched")
+    assert {key: op_meta[key] for key in (
+        "pair", "operation", "relation", "label_anchor", "pair_source",
+        "operation_source", "relation_source", "role", "core_factorial",
+        "grounding") } == {
+        "pair": True, "operation": True, "relation": False, "label_anchor": False,
+        "pair_source": "correct", "operation_source": "wrong_relation_matched",
+        "relation_source": "none", "role": "control", "core_factorial": False,
+        "grounding": "source_grounded",
+    }
+    relation_meta = mode_design_meta("pair_wrong_relation")
+    assert {key: relation_meta[key] for key in (
+        "pair", "operation", "relation", "label_anchor", "pair_source",
+        "operation_source", "relation_source", "role", "core_factorial",
+        "grounding") } == {
+        "pair": True, "operation": False, "relation": True, "label_anchor": False,
+        "pair_source": "correct", "operation_source": "none", "relation_source": "wrong",
+        "role": "control", "core_factorial": False,
+        "grounding": "source_grounded",
+    }
+
+
+def test_relation_matched_wrong_operation_is_strict_and_ordered():
+    rows, _, donors, meta = strict_control_dataset()
+    again, _ = select_relation_matched_wrong_operation_donors_for(rows, 1041)
+    assert donors == again
+    for i, donor in enumerate(donors):
+        if donor is None:
+            continue
+        assert meta[donor]["relation_kind"] == meta[i]["relation_kind"]
+        assert meta[donor]["arity"] == meta[i]["arity"]
+        assert meta[donor]["trace_id"] != meta[i]["trace_id"]
+        assert meta[donor]["operation_text"] != meta[i]["operation_text"]
+        assert tuple(meta[donor]["trace_id"]) == tuple(
+            resolve_operation_trace_v4(
+                rows[donor]["mr_id"], rows[donor].get("component_mrs")
+            )[0]
+        )
+    audit = converter.build_relation_matched_wrong_operation_audit(meta, donors, 1041)
+    assert audit["wrong_operation_trace_identity_collision_count"] == 0
+    assert audit["wrong_operation_text_unchanged_count"] == 0
+    assert audit["wrong_operation_same_relation_kind_rate"] == 1.0
+    assert audit["wrong_operation_same_arity_rate"] == 1.0
+    assert audit["strata"]
+
+
+def test_relation_matched_wrong_operation_does_not_cross_relation_or_arity():
+    rows, _, donors, meta = strict_control_dataset()
+    audit = converter.build_relation_matched_wrong_operation_audit(meta, donors, 1041)
+    # The arity-2 strata have one trace each, so their rows are unavailable.
+    unavailable = [i for i, donor in enumerate(donors)
+                   if meta[i].get("is_augmented") and donor is None]
+    assert unavailable
+    assert all(donor is None for donor in (donors[i] for i in unavailable))
+    assert audit["wrong_operation_relation_matched_ineligible"] == len(unavailable)
+    assert audit["strict_relation_matched_wrong_operation_coverage"] < 1.0
+
+
+def test_relation_matched_wrong_operation_conversion_has_no_fallback():
+    rows, original_map, donors, _ = strict_control_dataset()
+    with pytest.raises(ValueError, match="strict relation-matched"):
+        convert_to_alpaca(
+            rows, mode="pair_wrong_operation_relation_matched",
+            original_map=original_map, wrong_operation_relation_matched_donors=donors,
+            control_seed=1041, template_version=V4,
+        )
+    converted_rows, report = convert_to_alpaca(
+        rows, mode="pair_wrong_operation_relation_matched", original_map=original_map,
+        wrong_operation_relation_matched_donors=donors,
+        allow_partial_control_coverage=True, control_seed=1041, template_version=V4,
+    )
+    assert report["strict_relation_matched_wrong_operation_coverage"] < 1.0
+    assert len(converted_rows) < len(rows)
+    assert all("Paired source input:" in row["instruction"] for row in converted_rows
+               if "Input transformation:" in row["instruction"])
+    assert all("Output relation:" not in row["instruction"] for row in converted_rows)
+    assert all("Source label:" not in row["instruction"] for row in converted_rows)
+
+
+def test_wrong_relation_is_100_percent_deranged_and_preserves_pair_target():
+    rows, _, original_map = dataset()
+    correct, _ = convert_to_alpaca(
+        rows, mode="pair_relation", original_map=original_map, template_version=V4)
+    wrong, report = convert_to_alpaca(
+        rows, mode="pair_wrong_relation", original_map=original_map, template_version=V4,
+        control_seed=1041)
+    assert [row["output"] for row in wrong] == [row["output"] for row in correct]
+    assert [row["input"] for row in wrong] == [row["input"] for row in correct]
+    assert report["wrong_relation_total"] == 5
+    assert report["wrong_relation_identity_collision_count"] == 0
+    assert report["wrong_relation_text_unchanged_count"] == 0
+    assert report["wrong_relation_deranged_rate"] == 1.0
+    for row, original in zip(wrong, rows):
+        if original["mr_id"] != "none":
+            assert "Paired source input:" in row["instruction"]
+            assert "Output relation:" in row["instruction"]
+            assert "Input transformation:" not in row["instruction"]
+    assert wrong_relation_kind_v4("invariance") != "invariance"
+    assert wrong_relation_kind_v4("entailment_to_contradiction") != "entailment_to_contradiction"
+    assert wrong_relation_kind_v4("entailment_to_neutral") != "entailment_to_neutral"
 
 
 # ============================================================

@@ -94,6 +94,8 @@ def main():
                         default=INSTRUCTION_DESIGN_VERSION)
     parser.add_argument("--require-composite-provenance", action="store_true",
                         help="v4 正式 run：任何 composite 行缺少 component_mrs 直接失败")
+    parser.add_argument("--allow-partial-control-coverage", action="store_true",
+                        help="仅输出 strict wrong Operation 的 eligible subset；不跨 relation kind fallback")
     parser.add_argument("--output-dir", required=True,
                         help="RQ2 data directory; one <name> subdirectory is created")
     parser.add_argument("--manifest", required=True)
@@ -243,6 +245,8 @@ def main():
         shuffled_descriptions=shuffled,
         shuffled_relation_types=shuffled_relation_types,
         shuffled_operation_donors=shuffled_operation_donors,
+        control_seed=args.seed,
+        allow_partial_control_coverage=args.allow_partial_control_coverage,
         mismatched_pair_map=mismatched_pair_map,
         require_composite_provenance=args.require_composite_provenance,
         strict=True,
@@ -301,6 +305,40 @@ def main():
                 "shuffled_relation_identity_collision_count", 0
             ),
             "relation_type_mismatch_count": train_report.get("relation_type_mismatch_count", 0),
+            "wrong_operation_relation_matched_total": train_report.get(
+                "wrong_operation_relation_matched_total", 0
+            ),
+            "wrong_operation_relation_matched_eligible": train_report.get(
+                "wrong_operation_relation_matched_eligible", 0
+            ),
+            "wrong_operation_relation_matched_ineligible": train_report.get(
+                "wrong_operation_relation_matched_ineligible", 0
+            ),
+            "strict_relation_matched_wrong_operation_coverage": train_report.get(
+                "strict_relation_matched_wrong_operation_coverage", 0.0
+            ),
+            "wrong_operation_trace_identity_collision_count": train_report.get(
+                "wrong_operation_trace_identity_collision_count", 0
+            ),
+            "wrong_operation_text_unchanged_count": train_report.get(
+                "wrong_operation_text_unchanged_count", 0
+            ),
+            "wrong_operation_same_relation_kind_rate": train_report.get(
+                "wrong_operation_same_relation_kind_rate", 0.0
+            ),
+            "wrong_operation_same_arity_rate": train_report.get(
+                "wrong_operation_same_arity_rate", 0.0
+            ),
+            "wrong_relation_total": train_report.get("wrong_relation_total", 0),
+            "wrong_relation_identity_collision_count": train_report.get(
+                "wrong_relation_identity_collision_count", 0
+            ),
+            "wrong_relation_text_unchanged_count": train_report.get(
+                "wrong_relation_text_unchanged_count", 0
+            ),
+            "wrong_relation_deranged_rate": train_report.get(
+                "wrong_relation_deranged_rate", 0.0
+            ),
             "operation_provenance_distribution": train_report.get(
                 "operation_provenance_distribution", {}
             ),
@@ -331,6 +369,18 @@ def main():
         # frozen v2/v3 conversion reproduces its report byte-for-byte.
         report["matched_control_audit"] = matched_control_audit
         report["require_composite_provenance"] = args.require_composite_provenance
+        report["wrong_operation_relation_matched_audit"] = train_report.get(
+            "wrong_operation_relation_matched_audit"
+        )
+        report["wrong_relation_audit"] = {
+            key: train_report.get(key)
+            for key in (
+                "wrong_relation_total",
+                "wrong_relation_identity_collision_count",
+                "wrong_relation_text_unchanged_count",
+                "wrong_relation_deranged_rate",
+            )
+        }
     (out_dir / "conversion_report.json").write_text(
         json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
     )

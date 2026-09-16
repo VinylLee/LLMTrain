@@ -14,7 +14,7 @@ leakage / control caveats.
 | | |
 |---|---|
 | `instruction_template_version` | **4** (current). 2 and 3 are frozen and reproducible |
-| Modes | 8 core (grounding-aware 2×2×2) + 3 controls + 1 diagnostic = **12** |
+| Modes | 8 core (grounding-aware 2×2×2) + 5 controls + 1 diagnostic = **14** |
 | Training data | `data/nli/mettrain/snli_lr0.0037_gemma-3-4b-it-qat-v3_3/augmented_data_all_label_mrs_v3_3_full.json` |
 | Model | `google/gemma-3-4b-it`, LoRA rank 8, 3 epochs, lr 3e-4 |
 | Seeds | 42 / 43 / 44, all sharing one cohort + split manifest per seed |
@@ -46,7 +46,7 @@ python RQ2/run_rq2_snli.py --config RQ2/configs/rq2_snli_config_v4.json \
   --modes none operation_only relation_only operation_relation \
           pair_only pair_operation pair_relation full_specification
 
-# all 12 conditions (33 fine-tunes with 3 seeds)
+# all 14 conditions (42 fine-tunes with 3 seeds)
 python RQ2/run_rq2_snli.py --config RQ2/configs/rq2_snli_config_v4.json --seeds 42 43 44
 ```
 

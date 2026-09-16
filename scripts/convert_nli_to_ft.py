@@ -54,8 +54,11 @@ from mr_instruction_design import (
     V4_RELATION_KINDS,
     V4_SHORTCUT_RELATION_KINDS,
     build_matched_control_audit,
+    build_relation_matched_wrong_operation_audit,
+    select_relation_matched_wrong_operation_donors,
     operation_arity,
     relation_kind_v4,
+    wrong_relation_kind_v4,
     render_operation_v4,
     render_relation_v4,
     resolve_operation_trace_v4,
@@ -163,7 +166,16 @@ LEGACY_INSTRUCTION_TEMPLATE_VERSIONS = (2, 3)
 INSTRUCTION_TEMPLATE_VERSIONS_WITH_ORDERED_TRACE = (INSTRUCTION_DESIGN_VERSION_V4,)
 
 # Templates are *derived* from the mode registry, never hand-written.
-INSTRUCTION_TEMPLATES_V3 = dict(V3_INSTRUCTION_TEMPLATES)
+# These are the canonical modes that existed when v3 was frozen. New v4
+# controls must not alter the v3 template set or its conversion hash.
+FROZEN_V3_CANONICAL_MODES = (
+    "none", "operation_only", "relation_only", "operation_relation",
+    "pair_only", "pair_operation", "pair_relation", "full_specification",
+    "pair_shuffled_operation", "pair_shuffled_relation", "mismatched_pair",
+    "full_oracle",
+)
+
+INSTRUCTION_TEMPLATES_V3 = {mode: V3_INSTRUCTION_TEMPLATES[mode] for mode in FROZEN_V3_CANONICAL_MODES}
 INSTRUCTION_TEMPLATES = dict(V4_INSTRUCTION_TEMPLATES)
 
 # ------------------------------------------------------------------
@@ -907,12 +919,14 @@ def build_matched_control_rows_meta(samples, operation_descriptions=None):
         mr_id = normalize_mr_id(sample.get("mr_id"))
         if mr_id == "none":
             meta.append({
+                "is_augmented": False,
                 "trace_id": None, "arity": 0, "relation_kind": None,
                 "key": compute_sample_key(sample), "operation_text": None,
             })
             continue
         trace, provenance = resolve_operation_trace_v4(mr_id, sample.get("component_mrs"))
         meta.append({
+            "is_augmented": True,
             "trace_id": trace,
             "arity": len(trace),
             "relation_kind": relation_kind_v4(mr_id),
@@ -926,6 +940,13 @@ def select_matched_shuffled_operation_donors_for(samples, seed):
     """Donor indices for the v4 matched shuffled-operation control."""
     meta = build_matched_control_rows_meta(samples)
     return select_matched_shuffled_operation_donors(meta, seed), meta
+
+
+def select_relation_matched_wrong_operation_donors_for(samples, seed):
+    """Return strict relation-matched wrong-Operation donors and row metadata."""
+    meta = build_matched_control_rows_meta(samples)
+    donors = select_relation_matched_wrong_operation_donors(meta, seed)
+    return donors, meta
 
 
 def select_shuffled_relation_kinds_v4(samples, seed):
@@ -970,7 +991,10 @@ def convert_to_alpaca(
     shuffled_relation_types=None,
     mismatched_pair_map=None,
     shuffled_operation_donors=None,
+    wrong_operation_relation_matched_donors=None,
+    allow_partial_control_coverage=False,
     require_composite_provenance=False,
+    control_seed=0,
     strict=False,
     nli_instruction=None,
     template_version=INSTRUCTION_TEMPLATE_VERSION,
@@ -986,6 +1010,10 @@ def convert_to_alpaca(
         relation_effects: mr_id -> 关系效果描述 的映射（v2/v3）
         shuffled_descriptions: 可选，shuffled mr_id 列表（与 samples 等长）
         shuffled_operation_donors: v4 专用，matched shuffled-operation 的 donor 索引
+        wrong_operation_relation_matched_donors: v4 donor indices for the strict
+            relation-matched wrong-Operation control.
+        allow_partial_control_coverage: explicitly omit unavailable transformed
+            rows instead of raising; never falls back to another payload.
         require_composite_provenance: v4 正式 run 的硬门槛：任何 composite 行缺少
             component_mrs 都直接报错，而不是静默回退到 generic description。
         strict: 若 True，对数据完整性问题报错
@@ -1007,10 +1035,31 @@ def convert_to_alpaca(
     needs_relation = bool(spec["relation"])
     needs_label_anchor = bool(spec["label_anchor"])
     operation_source = spec["operation_source"]
+
     relation_source = spec["relation_source"]
     pair_source = spec["pair_source"]
     ordered_trace = uses_ordered_operation_trace(template_version)
     legacy = template_version == 2
+
+    wrong_operation_audit = None
+    wrong_operation_omitted_count = 0
+    if ordered_trace and operation_source == "wrong_relation_matched":
+        wrong_operation_relation_matched_donors, wrong_meta = (
+            (wrong_operation_relation_matched_donors, build_matched_control_rows_meta(samples))
+            if wrong_operation_relation_matched_donors is not None
+            else select_relation_matched_wrong_operation_donors_for(samples, control_seed)
+        )
+        wrong_operation_audit = build_relation_matched_wrong_operation_audit(
+            wrong_meta, wrong_operation_relation_matched_donors, control_seed
+        )
+        if (wrong_operation_audit["wrong_operation_relation_matched_ineligible"]
+                and not allow_partial_control_coverage):
+            raise ValueError(
+                "strict relation-matched wrong Operation 无法覆盖全部 transformed rows: "
+                f"{wrong_operation_audit['wrong_operation_relation_matched_eligible']}/"
+                f"{wrong_operation_audit['wrong_operation_relation_matched_total']} eligible; "
+                "请先审计，或显式启用 allow_partial_control_coverage。"
+            )
 
     converted = []
     label_dist = Counter()
@@ -1030,6 +1079,10 @@ def convert_to_alpaca(
     shuffled_operation_identity_collisions = 0
     shuffled_relation_identity_collisions = 0
     relation_type_mismatch_count = 0
+    wrong_relation_total = 0
+    wrong_relation_identity_collisions = 0
+    wrong_relation_text_unchanged = 0
+    wrong_relation_deranged = 0
     label_anchor_used_count = 0
 
     for i, s in enumerate(samples):
@@ -1067,7 +1120,19 @@ def convert_to_alpaca(
 
         if needs_operation and not is_source_row:
             if ordered_trace:
-                if operation_source == "shuffled" and shuffled_operation_donors is not None:
+                if (operation_source == "wrong_relation_matched"
+                        and wrong_operation_relation_matched_donors is not None):
+                    donor = wrong_operation_relation_matched_donors[i]
+                    if donor is None:
+                        wrong_operation_omitted_count += 1
+                        if allow_partial_control_coverage:
+                            continue
+                        raise ValueError("strict wrong Operation donor unexpectedly unavailable")
+                    row_trace, operation_provenance = resolve_operation_trace_v4(
+                        normalize_mr_id(samples[donor].get("mr_id")),
+                        samples[donor].get("component_mrs"),
+                    )
+                elif operation_source == "shuffled" and shuffled_operation_donors is not None:
                     donor = shuffled_operation_donors[i]
                     if donor is not None:
                         row_trace, operation_provenance = resolve_operation_trace_v4(
@@ -1120,8 +1185,21 @@ def convert_to_alpaca(
             if row_relation_kind in V4_SHORTCUT_RELATION_KINDS:
                 relation_shortcut_risk_count += 1
         if needs_relation and not is_source_row:
+            if needs_relation and relation_source == "wrong":
+                wrong_relation_total += 1
             if ordered_trace:
-                if relation_source == "shuffled" and shuffled_relation_types is not None:
+                if relation_source == "wrong":
+                    assigned_relation_type = wrong_relation_kind_v4(row_relation_kind)
+                    relation_desc = V4_RELATION_KIND_DESCRIPTIONS.get(
+                        assigned_relation_type, "")
+                    if assigned_relation_type == row_relation_kind:
+                        wrong_relation_identity_collisions += 1
+                    if relation_desc == render_relation_v4(mr_id):
+                        wrong_relation_text_unchanged += 1
+                    if (assigned_relation_type != row_relation_kind
+                            and relation_desc != render_relation_v4(mr_id)):
+                        wrong_relation_deranged += 1
+                elif relation_source == "shuffled" and shuffled_relation_types is not None:
                     assigned_relation_type = shuffled_relation_types[i]
                     if assigned_relation_type is not None:
                         if assigned_relation_type == row_relation_kind:
@@ -1272,6 +1350,30 @@ def convert_to_alpaca(
             ),
             "relation_kind_distribution_v4": dict(sorted(v4_relation_kind_dist.items())),
             "relation_shortcut_risk_count": relation_shortcut_risk_count,
+            "wrong_operation_relation_matched_audit": wrong_operation_audit,
+            "wrong_operation_relation_matched_total": (wrong_operation_audit or {}).get(
+                "wrong_operation_relation_matched_total", 0),
+            "wrong_operation_relation_matched_eligible": (wrong_operation_audit or {}).get(
+                "wrong_operation_relation_matched_eligible", 0),
+            "wrong_operation_relation_matched_ineligible": (wrong_operation_audit or {}).get(
+                "wrong_operation_relation_matched_ineligible", 0),
+            "strict_relation_matched_wrong_operation_coverage": (wrong_operation_audit or {}).get(
+                "strict_relation_matched_wrong_operation_coverage", 0.0),
+            "wrong_operation_trace_identity_collision_count": (wrong_operation_audit or {}).get(
+                "wrong_operation_trace_identity_collision_count", 0),
+            "wrong_operation_text_unchanged_count": (wrong_operation_audit or {}).get(
+                "wrong_operation_text_unchanged_count", 0),
+            "wrong_operation_same_relation_kind_rate": (wrong_operation_audit or {}).get(
+                "wrong_operation_same_relation_kind_rate", 0.0),
+            "wrong_operation_same_arity_rate": (wrong_operation_audit or {}).get(
+                "wrong_operation_same_arity_rate", 0.0),
+            "wrong_operation_omitted_count": wrong_operation_omitted_count,
+            "wrong_relation_total": wrong_relation_total,
+            "wrong_relation_identity_collision_count": wrong_relation_identity_collisions,
+            "wrong_relation_text_unchanged_count": wrong_relation_text_unchanged,
+            "wrong_relation_deranged_rate": (
+                wrong_relation_deranged / wrong_relation_total if wrong_relation_total else 0.0
+            ),
         })
 
     return converted, report
@@ -1649,7 +1751,7 @@ def generate_conversion_report(
 # ============================================================
 # JSON 文件操作
 # ============================================================
-def load_jsonl(filepath):
+def load_jsonl(filepath, quiet=False):
     """加载 JSONL 文件"""
     samples = []
     with open(filepath) as f:
@@ -1663,7 +1765,8 @@ def load_jsonl(filepath):
                     samples.append(d)
             except json.JSONDecodeError:
                 continue
-    print(f"  📥 {Path(filepath).name}: {len(samples)} 条有效样本")
+    if not quiet:
+        print(f"  📥 {Path(filepath).name}: {len(samples)} 条有效样本")
     return samples
 
 
@@ -1789,6 +1892,10 @@ def parse_args():
         default=INSTRUCTION_TEMPLATE_VERSION,
         help=f"MR instruction template schema version (current: {INSTRUCTION_TEMPLATE_VERSION})",
     )
+    parser.add_argument(
+        "--allow-partial-control-coverage", action="store_true",
+        help="仅对 strict wrong Operation 输出 eligible subset；不跨 relation kind fallback",
+    )
 
     # 兼容旧参数
     parser.add_argument("--binary", action="store_true", default=None,
@@ -1835,6 +1942,9 @@ def main():
             f"  ⚠️  {mode} is deprecated; use {MODE_ALIASES[mode]}. "
             f"（已映射到 {MODE_ALIASES[mode]}）"
         )
+    if template_version != INSTRUCTION_TEMPLATE_VERSION and canonical_mode in {
+            "pair_wrong_operation_relation_matched", "pair_wrong_relation"}:
+        raise ValueError("新增 RQ2 v4 semantic controls 仅支持 instruction_template_version=4")
     if template_version in LEGACY_INSTRUCTION_TEMPLATE_VERSIONS:
         print(
             f"  ⚠️  instruction template version {template_version} 为冻结的 legacy 版本；"
@@ -2062,6 +2172,8 @@ def main():
         shuffled_descriptions=shuffled_descriptions,
         shuffled_relation_types=shuffled_relation_types,
         mismatched_pair_map=mismatched_pair_map,
+        control_seed=args.seed,
+        allow_partial_control_coverage=args.allow_partial_control_coverage,
         strict=args.strict_pairing,
         nli_instruction=nli_instruction,
         template_version=template_version,

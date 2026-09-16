@@ -21,8 +21,11 @@
       "full_specification"
     ],
     "control_modes": [
+      "mismatched_pair",
       "pair_shuffled_operation",
-      "pair_shuffled_relation"
+      "pair_wrong_operation_relation_matched",
+      "pair_shuffled_relation",
+      "pair_wrong_relation"
     ],
     "diagnostic_modes": [
       "full_oracle"
@@ -61,8 +64,11 @@
     "pair_operation",
     "pair_relation",
     "full_specification",
+    "mismatched_pair",
     "pair_shuffled_operation",
+    "pair_wrong_operation_relation_matched",
     "pair_shuffled_relation",
+    "pair_wrong_relation",
     "full_oracle"
   ],
   "seeds": [
@@ -84,6 +90,8 @@
   "output_root": "RQ2/output/gemma3_4b_nli_grounded_v4",
   "data_root": "RQ2/data",
   "require_composite_provenance": true,
+  "allow_partial_control_coverage": false,
+  "_control_coverage_note": "pair_wrong_operation_relation_matched never cross-matches relation kind; enable only after reviewing its feasibility audit.",
   "_cohort_note": "v4 uses a DIFFERENT cohort file than v3, chosen because it is the only artifact that stores ordered component_mrs provenance for composite rows (data/nli/mettrain/snli_lr0.0037_gemma-3-4b-it-qat-v3_3/augmented_data_all_label_mrs_v3_3_full.json, 5340 rows, 2033 sources, 486 composites with 100% provenance coverage). The v3 cohort (snli_lr0.0037_gemma-3-4b-it-qat/augmented_data.json) has NO composite provenance, so v3 and v4 do NOT share metamorphic examples and their results are not directly comparable example-for-example. Source rows are identical across the two cohorts.",
   "_output_root_note": "v4 writes to its own root; v3 artifacts under RQ2/output/gemma3_4b_nli_grounded_v3/ stay untouched.",
   "_cohort_dir_note": "v4 samples into its own cohort directory so the frozen v3 cohort files under RQ2/data/cohorts/ are never overwritten.",

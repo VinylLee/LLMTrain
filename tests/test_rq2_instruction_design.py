@@ -620,8 +620,11 @@ def test_mismatched_pair_keeps_shape_but_changes_source():
 # shows exactly what moved.
 V3_GOLDEN_PATH = Path(__file__).resolve().parent / "fixtures" / "rq2_v3_instruction_golden.json"
 V3_GOLDEN_SHUFFLE_SEED = 1041
+V3_FROZEN_CONTROL_MODES = (
+    "pair_shuffled_operation", "pair_shuffled_relation", "mismatched_pair",
+)
 V3_GOLDEN_MODES = (
-    list(CORE_MODES) + list(CONTROL_MODES) + list(DIAGNOSTIC_MODES)
+    list(CORE_MODES) + list(V3_FROZEN_CONTROL_MODES) + list(DIAGNOSTIC_MODES)
     + ["relation_aware", "shuffled_operation"]
 )
 

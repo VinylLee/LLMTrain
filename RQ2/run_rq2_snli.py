@@ -225,6 +225,8 @@ def main():
             ]
             if cfg.get("require_composite_provenance"):
                 cmd.append("--require-composite-provenance")
+            if cfg.get("allow_partial_control_coverage"):
+                cmd.append("--allow-partial-control-coverage")
             if first_mode:
                 cmd.append("--write-manifest")
             if not run_cmd(cmd, f"Convert {name}", args.dry_run, env):

@@ -33,7 +33,7 @@ separable:
 | Relation kinds | `inv` / `flip` / `neutral` | `invariance` / `entailment_to_contradiction` / `entailment_to_neutral` |
 | Composite provenance | optional, silent fallback | **required** for a formal run (`--require-composite-provenance`) |
 
-**Unchanged:** the 2×2×2 matrix, the controls, `full_oracle`, block order,
+**Unchanged:** the 2×2×2 matrix, the existing controls, `full_oracle`, block order,
 `LABEL_ANCHOR` semantics, the NLI task block, source-row behaviour, the training
 cohort *mechanism*, and the standard SFT objective.
 
@@ -188,6 +188,21 @@ This is the metric v3 could not deliver: in the v3 cohort 833/3155 augmented
 rows had `correct operation text == shuffled operation text`, because the three
 composites shared one generic fallback. In v4 that count is **0**.
 
+### `pair_wrong_operation_relation_matched` — strict relation-matched negative
+
+This control keeps the correct Pair and shows an Operation payload from a donor
+with the same `relation_kind` and `operation_arity`, while requiring both the
+ordered `operation_trace_id` and rendered Operation text to differ. Donors may
+be reused; this matches the Relation-family prior and arity, not the Operation
+marginal distribution. Selection is deterministic by seed and uses
+token-length and trace-complexity proximity as soft tie-breakers.
+
+Rows without a strict donor are explicitly unavailable. They are reported by
+the feasibility audit and are never filled with a cross-family or cross-arity
+donor. Default formal conversion fails on such rows;
+`--allow-partial-control-coverage` may be enabled only after reviewing the
+audit, in which case unavailable rows are omitted rather than substituted.
+
 ### `pair_shuffled_relation`
 
 Reassigns the relation **kind**, preserving the kind marginals, so a row never
@@ -208,6 +223,15 @@ The marginals stay matched, so the contrast is not confounded by a shifted kind
 distribution, but for those ~16% of rows the Relation control is inert. This is
 reported as `shuffled_relation_identity_collision_count` in
 `matched_control_audit` and must not be described as a full derangement.
+
+### `pair_wrong_relation` — 100% semantic mismatch
+
+This control keeps the correct Pair, input and target, omits Operation, and
+replaces each Relation kind using the deterministic cycle
+`invariance → entailment_to_contradiction → entailment_to_neutral → invariance`.
+Every transformed row therefore has a different Relation kind and text. It is
+complementary to `pair_shuffled_relation`: it guarantees semantic mismatch but
+does not preserve the Relation marginal distribution.
 
 ---
 
@@ -327,16 +351,19 @@ python scripts/audit_rq2_v4_provenance.py \
    instead.
 2. **The relation control is only ~84% deranged** (§4) — structurally forced by
    the kind imbalance.
-3. **Token-length confound.** The v4 cohort's P=1 cells are longer (train p50:
+3. **Strict wrong-Operation coverage is data-dependent.** The audit must be
+   run before training; each `(relation_kind, arity)` stratum with one unique
+   trace has zero eligible rows. No cross-stratum fallback is allowed.
+4. **Token-length confound.** The v4 cohort's P=1 cells are longer (train p50:
    `none` 71 → `pair_relation` 162 → `full_specification` 203; max 371, 0 rows
    over the 512 cutoff). P contrasts remain length-unmatched.
-4. **Arity is not experimentally varied.** Every composite in this cohort is
+5. **Arity is not experimentally varied.** Every composite in this cohort is
    arity 2, so v4 cannot separate "more steps" from "composite". A cohort with
    3+ step composites is needed for that question.
-5. **Rare MRs.** `antonym_substitution` (13 rows), `voice_switch` (45),
+6. **Rare MRs.** `antonym_substitution` (13 rows), `voice_switch` (45),
    `synonym_replacement` (33), `composite_inv` (23) are too sparse for per-MR
    claims; only aggregate relation-kind effects are estimable.
-6. **Composite share differs between cohorts** (v4: 486/3307 = 15% vs v3:
+7. **Composite share differs between cohorts** (v4: 486/3307 = 15% vs v3:
    1949/3307 = 59%), so absolute accuracy between v3 and v4 is not comparable
    even before the example mismatch.
 
@@ -353,7 +380,7 @@ python RQ2/run_rq2_snli.py --config RQ2/configs/rq2_snli_config_v4.json \
   --modes none operation_only relation_only operation_relation \
           pair_only pair_operation pair_relation full_specification
 
-# + controls and diagnostic (11 conditions = 33 fine-tunes)
+# + controls and diagnostic (14 conditions = 42 fine-tunes)
 python RQ2/run_rq2_snli.py --config RQ2/configs/rq2_snli_config_v4.json --seeds 42 43 44
 ```
 

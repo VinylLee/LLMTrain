@@ -12,7 +12,7 @@ MR information 如何影响 **persistent MR-compliant behavior**。
 | 项 | 值 |
 |---|---|
 | `instruction_template_version` | **4**（当前）；2、3 冻结保留且可复现 |
-| mode 数量 | 8 个核心（grounding-aware 2×2×2）+ 3 个 control + 1 个 diagnostic = **12** |
+| mode 数量 | 8 个核心（grounding-aware 2×2×2）+ 5 个 control + 1 个 diagnostic = **14** |
 | 训练数据 | `data/nli/mettrain/snli_lr0.0037_gemma-3-4b-it-qat-v3_3/augmented_data_all_label_mrs_v3_3_full.json` |
 | 基座模型 | `google/gemma-3-4b-it`，LoRA rank 8，3 epochs，lr 3e-4，batch 4 × grad_accum 8 |
 | seeds | 42 / 43 / 44；同一 seed 下所有 mode 复用一个 cohort + 一个 split manifest |
@@ -48,7 +48,7 @@ python RQ2/run_rq2_snli.py --config RQ2/configs/rq2_snli_config_v4.json \
   --modes none operation_only relation_only operation_relation \
           pair_only pair_operation pair_relation full_specification
 
-# 全部 12 个条件（3 seeds = 33 次 fine-tune）
+# 全部 14 个条件（3 seeds = 42 次 fine-tune）
 python RQ2/run_rq2_snli.py --config RQ2/configs/rq2_snli_config_v4.json --seeds 42 43 44
 ```
 

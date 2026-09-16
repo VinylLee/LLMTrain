@@ -330,10 +330,21 @@ MODE_SPECS: Dict[str, Dict[str, object]] = {
         "pair_source": "correct", "operation_source": "shuffled", "relation_source": "none",
         "role": "control",
     },
+    "pair_wrong_operation_relation_matched": {
+        "pair": True, "label_anchor": False, "operation": True,
+        "relation": False, "pair_source": "correct",
+        "operation_source": "wrong_relation_matched", "relation_source": "none",
+        "role": "control",
+    },
     "pair_shuffled_relation": {
         "pair": True, "label_anchor": False, "operation": False, "relation": True,
         "pair_source": "correct", "operation_source": "none", "relation_source": "shuffled",
         "role": "control",
+    },
+    "pair_wrong_relation": {
+        "pair": True, "label_anchor": False, "operation": False,
+        "relation": True, "pair_source": "correct", "operation_source": "none",
+        "relation_source": "wrong", "role": "control",
     },
     "mismatched_pair": {
         "pair": True, "label_anchor": False, "operation": False, "relation": False,
@@ -727,6 +738,24 @@ def relation_kind_v4(mr_id: str) -> Optional[str]:
     return MR_V4_RELATION_KINDS.get(mr_id)
 
 
+# A semantic negative control: unlike shuffled Relation, this intentionally
+# gives every valid transformed row a different relation family.
+WRONG_RELATION_KIND_CYCLE: Dict[str, str] = {
+    "invariance": "entailment_to_contradiction",
+    "entailment_to_contradiction": "entailment_to_neutral",
+    "entailment_to_neutral": "invariance",
+}
+
+
+def wrong_relation_kind_v4(kind: Optional[str]) -> Optional[str]:
+    """Return a deterministic relation kind guaranteed to differ from ``kind``."""
+    if kind is None:
+        return None
+    try:
+        return WRONG_RELATION_KIND_CYCLE[kind]
+    except KeyError as exc:
+        raise ValueError(f"unsupported v4 relation kind: {kind!r}") from exc
+
 def relation_kind_requires_entailment_source(kind: Optional[str]) -> bool:
     return kind in ("entailment_to_contradiction", "entailment_to_neutral")
 
@@ -794,7 +823,140 @@ def render_operation_v4(trace_id: Sequence[str], provenance: str) -> str:
     body = "\n".join(f"{i}. {step}" for i, step in enumerate(steps, 1))
     return f"{V4_OPERATION_TRACE_INTRO}\n{body}"
 
+# ============================================================
+# v4 strict semantic controls
+# ============================================================
+def _wrong_operation_identity(meta: Dict[str, object]) -> Tuple[Tuple[str, ...], str]:
+    """Return the trace/text identity used by the strict Operation control."""
+    return tuple(meta.get("trace_id") or ()), str(meta.get("operation_text") or "")
 
+
+def select_relation_matched_wrong_operation_donors(
+    rows_meta: Sequence[Dict[str, object]], seed: int
+) -> List[Optional[int]]:
+    """Select strict wrong-Operation donors within ``(kind, arity)`` strata.
+
+    Unavailable rows return ``None``. No donor is ever taken from another
+    relation kind or arity. Donor rows may be reused: this is a payload donor
+    assignment, not a marginal-preserving permutation. Reuse is necessary
+    when one trace is a large majority within a stratum.
+    """
+    donors: List[Optional[int]] = [None] * len(rows_meta)
+    strata: Dict[Tuple[str, int], List[int]] = {}
+    for i, meta in enumerate(rows_meta):
+        trace = tuple(meta.get("trace_id") or ())
+        kind = meta.get("relation_kind")
+        if not trace or not kind or not meta.get("operation_text"):
+            continue
+        arity = int(meta.get("arity", len(trace)))
+        strata.setdefault((str(kind), arity), []).append(i)
+
+    for stratum in sorted(strata):
+        members = strata[stratum]
+        for i in members:
+            own_trace, own_text = _wrong_operation_identity(rows_meta[i])
+            candidates = [
+                j for j in members
+                if _wrong_operation_identity(rows_meta[j])[0] != own_trace
+                and _wrong_operation_identity(rows_meta[j])[1] != own_text
+            ]
+            if not candidates:
+                continue
+            own_tokens = len(own_text.split())
+            donors[i] = min(
+                candidates,
+                key=lambda j: (
+                    abs(len(str(rows_meta[j].get("operation_text") or "").split()) - own_tokens),
+                    abs(len(tuple(rows_meta[j].get("trace_id") or ())) - len(own_trace)),
+                    _stable_permutation_key(seed, str(rows_meta[j].get("key"))),
+                    str(rows_meta[j].get("key")),
+                ),
+            )
+    return donors
+
+
+def build_relation_matched_wrong_operation_audit(
+    rows_meta: Sequence[Dict[str, object]],
+    donors: Sequence[Optional[int]],
+    seed: int,
+) -> Dict[str, object]:
+    """Report strict wrong-Operation feasibility and quality by stratum."""
+    total = sum(1 for meta in rows_meta if meta.get("is_augmented", False))
+    eligible = 0
+    trace_collisions = 0
+    text_unchanged = 0
+    same_kind = 0
+    same_arity = 0
+    strata: Dict[Tuple[str, int], Dict[str, object]] = {}
+    trace_frequency: Dict[Tuple[str, int], Dict[Tuple[str, ...], int]] = {}
+
+    for i, meta in enumerate(rows_meta):
+        if not meta.get("is_augmented", False):
+            continue
+        trace = tuple(meta.get("trace_id") or ())
+        kind = meta.get("relation_kind")
+        arity = int(meta.get("arity", len(trace)))
+        if kind and trace:
+            key = (str(kind), arity)
+            info = strata.setdefault(key, {"row_count": 0, "eligible_row_count": 0})
+            info["row_count"] += 1
+            frequencies = trace_frequency.setdefault(key, {})
+            frequencies[trace] = frequencies.get(trace, 0) + 1
+        donor = donors[i] if i < len(donors) else None
+        if donor is None:
+            continue
+        donor_meta = rows_meta[donor]
+        own_trace, own_text = _wrong_operation_identity(meta)
+        donor_trace, donor_text = _wrong_operation_identity(donor_meta)
+        if own_trace == donor_trace:
+            trace_collisions += 1
+        if own_text == donor_text:
+            text_unchanged += 1
+        if donor_meta.get("relation_kind") == kind:
+            same_kind += 1
+        if int(donor_meta.get("arity", len(donor_trace))) == arity:
+            same_arity += 1
+        if (donor_trace != own_trace and donor_text != own_text
+                and donor_meta.get("relation_kind") == kind
+                and int(donor_meta.get("arity", len(donor_trace))) == arity):
+            eligible += 1
+            if kind and trace:
+                strata[(str(kind), arity)]["eligible_row_count"] += 1
+
+    for key, info in strata.items():
+        # ``trace_frequency`` is populated only for rows with usable ordered
+        # provenance; expose the count directly for the feasibility table.
+        # (Formal v4 input validation separately rejects unsupported traces.)
+        info["unique_trace_count"] = len(trace_frequency.get(key, {}))
+        info["ineligible_row_count"] = info["row_count"] - info["eligible_row_count"]
+        info["coverage"] = (
+            info["eligible_row_count"] / info["row_count"]
+            if info["row_count"] else 0.0
+        )
+
+    ineligible = total - eligible
+    return {
+        "seed": seed,
+        "wrong_operation_relation_matched_total": total,
+        "wrong_operation_relation_matched_eligible": eligible,
+        "wrong_operation_relation_matched_ineligible": ineligible,
+        "strict_relation_matched_wrong_operation_coverage": eligible / total if total else 0.0,
+        "wrong_operation_trace_identity_collision_count": trace_collisions,
+        "wrong_operation_text_unchanged_count": text_unchanged,
+        "wrong_operation_same_relation_kind_rate": same_kind / eligible if eligible else 0.0,
+        "wrong_operation_same_arity_rate": same_arity / eligible if eligible else 0.0,
+        "strata": [
+            {"relation_kind": kind, "arity": arity, **info}
+            for (kind, arity), info in sorted(strata.items())
+        ],
+        "trace_frequency": {
+            f"{kind}|arity={arity}": {
+                " -> ".join(trace): count
+                for trace, count in sorted(frequencies.items())
+            }
+            for (kind, arity), frequencies in sorted(trace_frequency.items())
+        },
+    }
 def operation_arity(trace_id: Sequence[str]) -> int:
     return len(trace_id)
 

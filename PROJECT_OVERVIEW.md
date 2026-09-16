@@ -155,7 +155,7 @@ python scripts/run_batch_experiments.py \
 负责：
 
 - 从逐行 JSON 读取 `premise`、`hypothesis`、`label`、`pair_id`、`mr_id` 等字段；
-- 支持 `--mr-instruction-mode`：核心 2×2×2 为 `none`、`operation_only`、`relation_only`、`operation_relation`、`pair_only`、`pair_operation`、`pair_relation`、`full_specification`；controls `pair_shuffled_operation`、`pair_shuffled_relation`、`mismatched_pair`；diagnostic `full_oracle`；`relation_aware`/`shuffled_operation` 为精确别名；
+- 支持 `--mr-instruction-mode`：核心 2×2×2 为 `none`、`operation_only`、`relation_only`、`operation_relation`、`pair_only`、`pair_operation`、`pair_relation`、`full_specification`；controls `pair_shuffled_operation`、`pair_wrong_operation_relation_matched`、`pair_shuffled_relation`、`pair_wrong_relation`、`mismatched_pair`；diagnostic `full_oracle`；`relation_aware`/`shuffled_operation` 为精确别名；strict controls 的 donor 约束与 feasibility audit 见 `RQ2/RQ2_V4_DESIGN_SUMMARY.md`；
 - MR 操作描述与关系效果使用独立的字典结构，主实验不读取关系效果；
 - 验证集始终使用普通 NLI instruction（mode=none），避免标签泄漏；
 - **按 `pair_id` group 拆分** train/validation，同一 pair 的所有样本不会跨 split；

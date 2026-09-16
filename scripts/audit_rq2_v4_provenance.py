@@ -30,6 +30,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from convert_nli_to_ft import (  # noqa: E402
     build_original_map,
+    select_relation_matched_wrong_operation_donors_for,
+    build_relation_matched_wrong_operation_audit,
     build_pair_groups,
     flatten_groups,
     load_jsonl,
@@ -45,7 +47,7 @@ from mr_instruction_design import (  # noqa: E402
 )
 
 
-def audit(rows):
+def audit(rows, seed=0):
     composites = [r for r in rows if normalize_mr_id(r.get("mr_id")) in COMPOSITE_MR_IDS]
 
     with_provenance = 0
@@ -91,6 +93,10 @@ def audit(rows):
         for trace, kinds in sorted(trace_kinds.items())
         if len(kinds) > 1
     }
+    wrong_donors, wrong_meta = select_relation_matched_wrong_operation_donors_for(rows, seed)
+    wrong_operation_audit = build_relation_matched_wrong_operation_audit(
+        wrong_meta, wrong_donors, seed
+    )
 
     return {
         "total_rows": len(rows),
@@ -116,6 +122,7 @@ def audit(rows):
         },
         "traces_spanning_multiple_relation_kinds": cross_kind,
         "formal_v4_ready": (missing + unsupported) == 0,
+        "strict_wrong_operation_feasibility": wrong_operation_audit,
     }
 
 
@@ -128,7 +135,7 @@ def main():
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
 
-    rows = load_jsonl(args.input)
+    rows = load_jsonl(args.input, quiet=args.json)
     if not rows:
         raise SystemExit(f"没有有效样本: {args.input}")
 
@@ -144,7 +151,7 @@ def main():
         rows = flatten_groups([group_map[key] for key in train_ids])
         scope = "train split"
 
-    result = audit(rows)
+    result = audit(rows, args.seed)
     result["input"] = args.input
     result["scope"] = scope
 
@@ -174,6 +181,21 @@ def main():
     print(f"    operation_arity_distribution: {r['operation_arity_distribution']}")
     print()
     print("  -- relation kinds (v4) --")
+    print("  -- strict relation-matched wrong Operation feasibility --")
+    f = r["strict_wrong_operation_feasibility"]
+    print("    relation_kind                    arity rows unique_traces eligible ineligible coverage")
+    for item in f["strata"]:
+        print(
+            f"    {item['relation_kind']:32s} {item['arity']:5d} "
+            f"{item['row_count']:4d} {item['unique_trace_count']:13d} "
+            f"{item['eligible_row_count']:8d} {item['ineligible_row_count']:9d} {item['coverage']:.4f}"
+        )
+    print(f"    TOTAL eligible / transformed: {f['wrong_operation_relation_matched_eligible']} / {f['wrong_operation_relation_matched_total']} "
+          f"({f['strict_relation_matched_wrong_operation_coverage']:.4f})")
+    print("    ordered trace frequencies:")
+    for stratum, frequencies in f["trace_frequency"].items():
+        print(f"      {stratum}: {frequencies}")
+    print()
     for kind, count in sorted(r["relation_kind_distribution_v4"].items(), key=lambda kv: -kv[1]):
         print(f"    {kind:28s} {count}")
     print()

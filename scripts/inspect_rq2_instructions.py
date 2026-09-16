@@ -41,6 +41,7 @@ from convert_nli_to_ft import (  # noqa: E402
     load_jsonl,
     mode_design_meta,
     normalize_mr_id,
+    select_relation_matched_wrong_operation_donors_for,
     select_matched_shuffled_operation_donors_for,
     select_shuffled_operation_mr_ids,
     select_shuffled_relation_kinds_v4,
@@ -56,6 +57,7 @@ from mr_instruction_design import (  # noqa: E402
     V4_ATOMIC_OPERATION_STEPS,
     V4_RELATION_KIND_DESCRIPTIONS,
     mode_spec,
+    wrong_relation_kind_v4,
     relation_kind_v4,
     relation_type_for,
     render_operation_v4,
@@ -114,6 +116,10 @@ def render(sample, mode, context, version):
             if spec["operation_source"] == "shuffled" and context["shuffled_operation_donor"] is not None:
                 source_row = context["samples"][context["shuffled_operation_donor"]] \
                     if context.get("samples") else sample
+            elif (spec["operation_source"] == "wrong_relation_matched"
+                  and context.get("wrong_operation_donor") is not None):
+                source_row = context["samples"][context["wrong_operation_donor"]] \
+                    if context.get("samples") else sample
             trace, provenance = resolve_operation_trace_v4(
                 normalize_mr_id(source_row.get("mr_id")), source_row.get("component_mrs"))
             operation_description = render_operation_v4(trace, provenance)
@@ -127,7 +133,10 @@ def render(sample, mode, context, version):
     relation_description = ""
     if spec["relation"] and not is_source_row:
         if uses_ordered_operation_trace(version):
-            if spec["relation_source"] == "shuffled" and context["shuffled_relation_kind"]:
+            if spec["relation_source"] == "wrong":
+                relation_description = V4_RELATION_KIND_DESCRIPTIONS[
+                    wrong_relation_kind_v4(relation_kind_v4(true_mr_id))]
+            elif spec["relation_source"] == "shuffled" and context["shuffled_relation_kind"]:
                 relation_description = V4_RELATION_KIND_DESCRIPTIONS[
                     context["shuffled_relation_kind"]]
             else:
@@ -175,7 +184,7 @@ def main():
     args = parser.parse_args()
     version = args.template_version
 
-    samples = load_jsonl(args.input)
+    samples = load_jsonl(args.input, quiet=args.json)
     if not samples:
         raise SystemExit(f"没有有效样本: {args.input}")
     if args.list:
@@ -191,9 +200,11 @@ def main():
     shuffle_seed = args.seed + 999
     if uses_ordered_operation_trace(version):
         shuffled_ops, _ = select_matched_shuffled_operation_donors_for(ordered, shuffle_seed)
+        wrong_ops, _ = select_relation_matched_wrong_operation_donors_for(ordered, args.seed)
         shuffled_rels = select_shuffled_relation_kinds_v4(ordered, shuffle_seed)
     else:
         shuffled_ops = select_shuffled_operation_mr_ids(ordered, shuffle_seed)
+        wrong_ops = [None] * len(ordered)
         shuffled_rels = select_shuffled_relation_types(ordered, shuffle_seed)
 
     mismatched_map = build_mismatched_pair_map(groups) if len(groups) > 1 else {}
@@ -219,18 +230,29 @@ def main():
         "source": source_by_group.get(sample.get("_group_key")),
         "mismatched_source": source_by_group.get(mismatched_map.get(sample.get("_group_key"))),
         "shuffled_operation_donor": shuffled_ops[index],
+        "wrong_operation_donor": wrong_ops[index],
         "shuffled_relation_kind": shuffled_rels[index],
         "shuffled_operation_mr_id": shuffled_ops[index],
         "shuffled_relation_type": shuffled_rels[index],
     }
 
     description = describe_row(sample)
+    inspect_modes = ALL_INSPECT_MODES if uses_ordered_operation_trace(version) else tuple(
+        mode for mode in ALL_INSPECT_MODES
+        if mode not in {"pair_wrong_operation_relation_matched", "pair_wrong_relation"}
+    )
     results = {}
-    for mode in ALL_INSPECT_MODES:
-        results[mode] = {
-            "design": mode_design_meta(mode),
-            **render(sample, mode, context, version),
-        }
+    is_source_row = normalize_mr_id(sample.get("mr_id")) == "none"
+    for mode in inspect_modes:
+        result = {"design": mode_design_meta(mode)}
+        if (mode == "pair_wrong_operation_relation_matched"
+                and not is_source_row
+                and wrong_ops[index] is None):
+            result.update({"eligible": False, "instruction": None, "output": None})
+        else:
+            result.update(render(sample, mode, context, version))
+            result["eligible"] = True
+        results[mode] = result
 
     if args.json:
         print(json.dumps({
@@ -245,6 +267,26 @@ def main():
                 if shuffled_ops[index] is not None else None
             ),
             "shuffled_relation_kind": shuffled_rels[index],
+            "wrong_operation_donor_mr_id": (
+                normalize_mr_id(ordered[wrong_ops[index]].get("mr_id"))
+                if wrong_ops[index] is not None else None
+            ),
+            "wrong_operation_eligible": wrong_ops[index] is not None,
+            "wrong_operation_true_trace": description["operation_trace_id"],
+            "wrong_operation_donor_trace": (
+                describe_row(ordered[wrong_ops[index]])["operation_trace_id"]
+                if wrong_ops[index] is not None else None
+            ),
+            "wrong_operation_true_relation_kind": description["relation_kind_v4"],
+            "wrong_operation_donor_relation_kind": (
+                describe_row(ordered[wrong_ops[index]])["relation_kind_v4"]
+                if wrong_ops[index] is not None else None
+            ),
+            "wrong_operation_true_arity": description["operation_arity"],
+            "wrong_operation_donor_arity": (
+                describe_row(ordered[wrong_ops[index]])["operation_arity"]
+                if wrong_ops[index] is not None else None
+            ),
             "modes": results,
         }, indent=2, ensure_ascii=False))
         return 0
@@ -272,6 +314,17 @@ def main():
     if shuffled_ops[index] is not None:
         donor = ordered[shuffled_ops[index]]
         print(f"  shuffled op donor: {normalize_mr_id(donor.get('mr_id'))}")
+    if wrong_ops[index] is None:
+        print("  strict wrong-op : NOT ELIGIBLE (no same relation kind + arity donor with different trace/text)")
+    else:
+        donor = ordered[wrong_ops[index]]
+        donor_desc = describe_row(donor)
+        print(f"  strict wrong-op donor: {donor_desc['mr_id']}")
+        print(f"    correct trace     : {description['operation_trace_id']}")
+        print(f"    wrong trace       : {donor_desc['operation_trace_id']}")
+        print(f"    correct relation  : {description['relation_kind_v4']}")
+        print(f"    donor relation    : {donor_desc['relation_kind_v4']}")
+        print(f"    arity             : {description['operation_arity']} == {donor_desc['operation_arity']}")
     print(f"  shuffled relation: {shuffled_rels[index]}")
     print("=" * 78)
     print()
@@ -280,7 +333,7 @@ def main():
     print(f"    Hypothesis: {sample.get('hypothesis')}")
     print()
 
-    for mode in ALL_INSPECT_MODES:
+    for mode in inspect_modes:
         design = results[mode]["design"]
         flags = "".join(
             letter if design[key] else "-"
@@ -290,8 +343,11 @@ def main():
         print("-" * 78)
         print(f"  MODE {mode}   [{flags}]  {design['grounding']} / {design['role']}")
         print("-" * 78)
-        print(results[mode]["instruction"])
-        print(f"\n  >> output: {results[mode]['output']}")
+        if not results[mode].get("eligible", True):
+            print("NOT ELIGIBLE: strict relation-matched donor unavailable")
+        else:
+            print(results[mode]["instruction"])
+            print(f"\n  >> output: {results[mode]['output']}")
         print()
     return 0
 
