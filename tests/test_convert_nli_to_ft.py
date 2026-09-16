@@ -105,7 +105,8 @@ def test_custom_instruction_reaches_source_and_augmented():
     converted, _ = convert_to_alpaca(rows, mode="pair_operation",
                                      original_map=original_map,
                                      operation_descriptions=MR_OPERATION_DESCRIPTIONS,
-                                     nli_instruction="CUSTOM_INSTRUCTION_SENTINEL")
+                                     nli_instruction="CUSTOM_INSTRUCTION_SENTINEL",
+                                     template_version=2)
     assert all("CUSTOM_INSTRUCTION_SENTINEL" in row["instruction"] for row in converted)
 
 
@@ -163,8 +164,11 @@ def test_token_report_uses_real_tokenizer_path_and_reports_by_mr():
     assert report["by_mr"]["validation"]["synonym_replacement"]["count"] == 1
 
 
-def test_template_v2_hashes_are_full_sha256():
-    assert INSTRUCTION_TEMPLATE_VERSION == 2
+def test_template_hashes_are_full_sha256():
+    # v3 is current; v2 is retained as a frozen legacy path.
+    assert INSTRUCTION_TEMPLATE_VERSION == 3
+    assert 2 in converter.LEGACY_INSTRUCTION_TEMPLATE_VERSIONS
+    assert converter.LEGACY_INSTRUCTION_TEMPLATES_V2
     for value in (
         INSTRUCTION_TEMPLATE_HASH,
         OPERATION_DESCRIPTION_HASH,
@@ -185,7 +189,8 @@ def test_reference_template_v2_handles_embedded_quotes():
         sample,
         original_sample=original,
         mode="pair_operation",
-        operation_description=MR_OPERATION_DESCRIPTIONS["synonym_replacement"],
+        operation_description=converter.LEGACY_MR_OPERATION_DESCRIPTIONS_V2["synonym_replacement"],
+        template_version=2,
     )
     instruction = result["instruction"]
     assert (
@@ -521,6 +526,7 @@ def test_instruction_pair_operation_no_label_leak():
     result = build_instruction_for_sample(
         sample, original_sample=original,
         mode="pair_operation", operation_description=desc,
+        template_version=2,
     )
 
     instr = result["instruction"]
@@ -629,6 +635,7 @@ def test_instruction_full_oracle():
         sample, original_sample=original,
         mode="full_oracle", operation_description=desc,
         relation_effect=effect, original_label="entailment",
+        template_version=2,
     )
 
     assert "Reference label" in result["instruction"]

@@ -21,6 +21,12 @@ STAGES = ["audit", "sample", "convert", "finetune", "test", "summarize"]
 
 sys.path.insert(0, str(SCRIPTS_DIR))
 from project_runtime import build_subprocess_env, resolve_model_reference  # noqa: E402
+from mr_instruction_design import (  # noqa: E402
+    ALL_MODE_NAMES,
+    CORE_MODES,
+    INSTRUCTION_DESIGN_VERSION,
+    mode_design_meta,
+)
 
 
 def load_json(path):
@@ -114,6 +120,19 @@ use_cache: false
 """
 
 
+def rq2_converted_dir(cfg, data_root):
+    """Where converted datasets go for this design version.
+
+    The v3 block wording differs from the frozen v2 templates, so v3 runs must
+    not overwrite the historical v2 conversions.  Configs may pin the directory
+    explicitly via ``converted_dir``; otherwise the v3 default is used.
+    """
+    configured = cfg.get("converted_dir")
+    if configured:
+        return project_path(configured)
+    return data_root / "converted"
+
+
 def experiments(seeds, modes):
     return [
         {
@@ -130,9 +149,8 @@ def main():
     parser = argparse.ArgumentParser(description="RQ2 controlled SNLI experiment")
     parser.add_argument("--config", default=str(DEFAULT_CONFIG))
     parser.add_argument("--seeds", nargs="+", type=int)
-    parser.add_argument("--modes", nargs="+", choices=[
-        "none", "operation_only", "pair_only", "pair_operation", "shuffled_operation",
-    ])
+    parser.add_argument("--modes", nargs="+", choices=sorted(ALL_MODE_NAMES),
+                        help=f"核心 2x2x2: {list(CORE_MODES)}；其余为 controls/diagnostic")
     parser.add_argument("--steps", nargs="+", choices=STAGES, default=STAGES)
     parser.add_argument("--output-root", default=None)
     parser.add_argument("--smoke", action="store_true", help="limit each training run to 20 steps")
@@ -172,7 +190,7 @@ def main():
         sampled = cohort_dir / "sampled.json"
         sampling_report = cohort_dir / "sampling_report.json"
         manifest = cohort_dir / "split_manifest.json"
-        converted_dir = data_root / "converted"
+        converted_dir = rq2_converted_dir(cfg, data_root)
         exp_dir = output_root / name
 
         if "sample" in args.steps and (not args.resume or not sampled.exists()):
@@ -195,11 +213,13 @@ def main():
                 "--name", name,
                 "--mode", exp["mode"],
                 "--seed", exp["seed"],
-                "--output-dir", "RQ2/data/converted",
+                "--output-dir", str(converted_dir.relative_to(PROJECT_ROOT)),
                 "--manifest", manifest,
                 "--val-ratio", cfg["data"]["val_ratio"],
                 "--cutoff-len", cfg["data"]["cutoff_len"],
                 "--tokenizer-path", model_path,
+                "--instruction-template-version",
+                cfg.get("instruction_template_version", INSTRUCTION_DESIGN_VERSION),
             ]
             if first_mode:
                 cmd.append("--write-manifest")
@@ -218,6 +238,14 @@ def main():
                     "model": cfg["model"]["hub_id"],
                     "model_path": model_path,
                     "mode": exp["mode"],
+                    # P/O/R/L design metadata: recorded explicitly so downstream
+                    # analysis never re-derives the design from the mode name.
+                    "mr_design": {
+                        **mode_design_meta(exp["mode"]),
+                        "template_version": cfg.get(
+                            "instruction_template_version", INSTRUCTION_DESIGN_VERSION
+                        ),
+                    },
                     "seed": exp["seed"],
                     "train_input": cfg["data"]["training_input"],
                     "target_samples": cfg["data"]["target_samples"],

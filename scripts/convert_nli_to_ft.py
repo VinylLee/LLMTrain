@@ -42,6 +42,40 @@ from pathlib import Path
 from project_runtime import PROJECT_ROOT
 from collections import Counter, defaultdict
 
+from mr_instruction_design import (
+    ALL_MODE_NAMES,
+    CANONICAL_MODES,
+    INSTRUCTION_TEMPLATES as V3_INSTRUCTION_TEMPLATES,
+    CONTROL_MODES,
+    CORE_MODES,
+    DIAGNOSTIC_MODES,
+    MODE_ALIASES,
+    MODE_SPECS,
+    MR_OPERATION_DESCRIPTIONS,
+    MR_OPERATION_SPECS,
+    MR_RELATION_DESCRIPTIONS,
+    MR_RELATION_EFFECTS,
+    MR_RELATION_SPECS,
+    OPERATION_PROVENANCE_COMPONENTS,
+    OPERATION_PROVENANCE_EXACT,
+    OPERATION_PROVENANCE_FALLBACK,
+    OPERATION_PROVENANCE_NONE,
+    RELATION_TYPES,
+    RELATION_TYPE_DESCRIPTIONS,
+    block_derangement,
+    build_mode_template,
+    compose_instruction,
+    derangement_collision_count,
+    derangement_frequency_mismatch,
+    grounding_status,
+    mode_design_meta,
+    mode_spec,
+    relation_type_for,
+    resolve_mode_name,
+    resolve_operation_description,
+    resolve_relation_description,
+)
+
 
 def serialize_counter_keys(counter):
     """将 Counter 中不可 JSON 序列化的 key（如 tuple）转为字符串 key"""
@@ -85,10 +119,35 @@ KNOWN_MR_IDS = frozenset({
 })
 
 # ============================================================
-# MR 操作描述（仅描述文本变换，不含标签暗示）
-# 主实验（pair_operation, operation_only）只能使用此字典
+# Instruction 常量
 # ============================================================
-MR_OPERATION_DESCRIPTIONS = {
+# v3 (current): grounding-aware 2x2x2 design.  Blocks, mode registry,
+# operation/relation specifications and the composer all live in
+# ``scripts/mr_instruction_design.py`` -- the single source of truth shared by
+# the converter, the RQ2 driver and the batch runner.
+#
+# v2 (frozen legacy): the pre-refactor per-mode hand-written templates.  They
+# are kept *only* so historical configs (``instruction_template_version: 2``)
+# remain loadable and reproducible.  Do not add modes here.
+INSTRUCTION_NLI = (
+    "Determine the natural language inference relation between the premise and hypothesis. "
+    "Answer with exactly one label: entailment, neutral, or contradiction."
+)
+INSTRUCTION_NLI_BINARY = (
+    "Determine whether the premise entails the hypothesis. "
+    "Answer with exactly one label: entailment or not_entailment."
+)
+
+INSTRUCTION_TEMPLATE_VERSION = 3
+LEGACY_INSTRUCTION_TEMPLATE_VERSIONS = (2,)
+
+# v3 templates are *derived* from the mode registry, never hand-written.
+INSTRUCTION_TEMPLATES = dict(V3_INSTRUCTION_TEMPLATES)
+
+# ------------------------------------------------------------------
+# Frozen v2 legacy definitions (do not modify -- historical reproduction)
+# ------------------------------------------------------------------
+LEGACY_MR_OPERATION_DESCRIPTIONS_V2 = {
     "adding_contradiction":
         "Additional information was inserted, and the inserted content is incompatible "
         "with part of the reference text.",
@@ -135,11 +194,7 @@ MR_OPERATION_DESCRIPTIONS = {
     "none": "",
 }
 
-# ============================================================
-# MR 输出关系描述（仅用于 relation_aware / full_oracle）
-# 主实验代码路径不得读取此字典
-# ============================================================
-MR_RELATION_EFFECTS = {
+LEGACY_MR_RELATION_EFFECTS_V2 = {
     "adding_contradiction":
         "The inserted content conflicts with the reference, so the original "
         "relation is likely disrupted.",
@@ -186,21 +241,7 @@ MR_RELATION_EFFECTS = {
     "none": "",
 }
 
-# ============================================================
-# Instruction 模板（详见 MR_AS_INSTRUCTION_PLAN.md Section 5）
-# ============================================================
-INSTRUCTION_NLI = (
-    "Determine the natural language inference relation between the premise and hypothesis. "
-    "Answer with exactly one label: entailment, neutral, or contradiction."
-)
-INSTRUCTION_NLI_BINARY = (
-    "Determine whether the premise entails the hypothesis. "
-    "Answer with exactly one label: entailment or not_entailment."
-)
-
-INSTRUCTION_TEMPLATE_VERSION = 2
-
-INSTRUCTION_TEMPLATES = {
+LEGACY_INSTRUCTION_TEMPLATES_V2 = {
     "none": "{nli_instruction}",
 
     "operation_only": (
@@ -278,21 +319,36 @@ INSTRUCTION_TEMPLATES = {
     ),
 }
 
-MR_INSTRUCTION_MODES = frozenset({
-    "none", "operation_only", "pair_only", "pair_operation",
-    "shuffled_operation", "relation_aware", "full_oracle",
-})
+#: Maps a canonical v3 mode onto the closest v2 template (legacy runs only).
+LEGACY_V2_TEMPLATE_FOR_MODE = {
+    "none": "none",
+    "operation_only": "operation_only",
+    "pair_only": "pair_only",
+    "pair_operation": "pair_operation",
+    "pair_shuffled_operation": "shuffled_operation",
+    "full_specification": "relation_aware",
+    "full_oracle": "full_oracle",
+}
+
+MR_INSTRUCTION_MODES = frozenset(ALL_MODE_NAMES)
 
 # 需要 original label 的模式（用于校验）
-MODES_REQUIRING_ORIGINAL_LABEL = frozenset({"full_oracle"})
+MODES_REQUIRING_ORIGINAL_LABEL = frozenset(
+    mode for mode, spec in MODE_SPECS.items() if spec["label_anchor"]
+)
 
-# 需要 relation effect 的模式
-MODES_REQUIRING_RELATION_EFFECT = frozenset({"relation_aware", "full_oracle"})
+# 需要 relation 描述的模式
+MODES_REQUIRING_RELATION_EFFECT = frozenset(
+    mode for mode, spec in MODE_SPECS.items() if spec["relation"]
+)
 
-MODES_REQUIRING_OPERATION = frozenset({
-    "operation_only", "pair_operation", "shuffled_operation",
-    "relation_aware", "full_oracle",
-})
+MODES_REQUIRING_OPERATION = frozenset(
+    mode for mode, spec in MODE_SPECS.items() if spec["operation"]
+)
+
+MODES_REQUIRING_PAIR = frozenset(
+    mode for mode, spec in MODE_SPECS.items() if spec["pair"]
+)
 
 
 def canonical_sha256(value):
@@ -311,7 +367,18 @@ INSTRUCTION_TEMPLATE_HASH = canonical_sha256({
     "templates": INSTRUCTION_TEMPLATES,
 })
 OPERATION_DESCRIPTION_HASH = canonical_sha256(MR_OPERATION_DESCRIPTIONS)
-RELATION_EFFECT_HASH = canonical_sha256(MR_RELATION_EFFECTS)
+RELATION_EFFECT_HASH = canonical_sha256(MR_RELATION_DESCRIPTIONS)
+LEGACY_OPERATION_DESCRIPTION_HASH_V2 = canonical_sha256(LEGACY_MR_OPERATION_DESCRIPTIONS_V2)
+LEGACY_RELATION_EFFECT_HASH_V2 = canonical_sha256(LEGACY_MR_RELATION_EFFECTS_V2)
+
+
+def descriptions_for_version(template_version):
+    """Return ``(operation_descriptions, relation_descriptions)`` for a version."""
+    if template_version == INSTRUCTION_TEMPLATE_VERSION:
+        return MR_OPERATION_DESCRIPTIONS, MR_RELATION_DESCRIPTIONS
+    if template_version in LEGACY_INSTRUCTION_TEMPLATE_VERSIONS:
+        return LEGACY_MR_OPERATION_DESCRIPTIONS_V2, LEGACY_MR_RELATION_EFFECTS_V2
+    raise ValueError(f"不支持的 instruction template version: {template_version}")
 
 
 # ============================================================
@@ -478,19 +545,27 @@ def build_instruction_for_sample(
     is_binary=False,
     is_original=False,
     nli_instruction=None,
+    relation_description=None,
+    template_version=INSTRUCTION_TEMPLATE_VERSION,
 ):
     """根据 mode 构建 instruction 文本。
+
+    v3 (default) composes fixed blocks selected by the mode registry; the only
+    thing that varies between modes is *which* blocks are present.  v2 is the
+    frozen legacy per-mode template path.
 
     Args:
         sample: 当前样本 dict（有 premise, hypothesis, label）
         original_sample: 原始对照样本 dict，或 None
-        mode: MR instruction mode
+        mode: MR instruction mode（v3 canonical 或 deprecated alias）
         operation_description: 操作描述文本
-        relation_effect: 关系效果描述（仅 relation_aware / full_oracle）
-        original_label: 原始标签名（仅 full_oracle）
+        relation_effect: 关系描述文本（v2 名称，等价于 relation_description）
+        relation_description: 关系描述文本（v3 名称）
+        original_label: 原始标签名（仅 L=1 的 diagnostic mode）
         is_binary: 是否二分类
         is_original: 当前样本是否为原始 source（mr_id=none）。
                       原始样本始终使用普通 NLI instruction。
+        template_version: 3 = grounding-aware block design, 2 = frozen legacy
 
     Returns:
         Alpaca 格式 dict: {"instruction": ..., "input": ..., "output": ...}
@@ -512,76 +587,30 @@ def build_instruction_for_sample(
         output_label = str(label)
 
     # 原始样本（mr_id=none）始终使用普通 NLI instruction，不添加任何 MR 信息
-    if mode != "none" and is_original:
+    if is_original:
         mode = "none"
 
-    if mode == "none":
-        instruction = INSTRUCTION_TEMPLATES["none"].format(
-            nli_instruction=nli_instruction
-        )
-
-    elif mode in ("operation_only",):
-        instruction = INSTRUCTION_TEMPLATES["operation_only"].format(
+    if template_version in LEGACY_INSTRUCTION_TEMPLATE_VERSIONS:
+        instruction = _build_instruction_v2(
+            mode=mode,
+            original_sample=original_sample,
             operation_description=operation_description,
+            relation_effect=relation_description if relation_description is not None else relation_effect,
+            original_label=original_label,
             nli_instruction=nli_instruction,
         )
-
-    elif mode == "pair_only":
-        if original_sample is None:
-            # fallback: 无 original 时使用普通 instruction
-            instruction = INSTRUCTION_TEMPLATES["none"].format(
-                nli_instruction=nli_instruction
-            )
-        else:
-            instruction = INSTRUCTION_TEMPLATES["pair_only"].format(
-                original_premise=original_sample["premise"].strip(),
-                original_hypothesis=original_sample["hypothesis"].strip(),
-                nli_instruction=nli_instruction,
-            )
-
-    elif mode in ("pair_operation", "shuffled_operation"):
-        if original_sample is None:
-            instruction = INSTRUCTION_TEMPLATES["none"].format(
-                nli_instruction=nli_instruction
-            )
-        else:
-            instruction = INSTRUCTION_TEMPLATES["pair_operation"].format(
-                original_premise=original_sample["premise"].strip(),
-                original_hypothesis=original_sample["hypothesis"].strip(),
-                operation_description=operation_description,
-                nli_instruction=nli_instruction,
-            )
-
-    elif mode == "relation_aware":
-        if original_sample is None:
-            instruction = INSTRUCTION_TEMPLATES["none"].format(
-                nli_instruction=nli_instruction
-            )
-        else:
-            instruction = INSTRUCTION_TEMPLATES["relation_aware"].format(
-                original_premise=original_sample["premise"].strip(),
-                original_hypothesis=original_sample["hypothesis"].strip(),
-                operation_description=operation_description,
-                relation_effect=relation_effect,
-                nli_instruction=nli_instruction,
-            )
-
-    elif mode == "full_oracle":
-        if original_sample is None:
-            instruction = INSTRUCTION_TEMPLATES["none"].format(
-                nli_instruction=nli_instruction
-            )
-        else:
-            instruction = INSTRUCTION_TEMPLATES["full_oracle"].format(
-                original_premise=original_sample["premise"].strip(),
-                original_hypothesis=original_sample["hypothesis"].strip(),
-                original_label=original_label,
-                operation_description=operation_description,
-                relation_effect=relation_effect,
-                nli_instruction=nli_instruction,
-            )
     else:
-        raise ValueError(f"未知 mr_instruction_mode: {mode}")
+        if relation_description is None:
+            relation_description = relation_effect
+        instruction = compose_instruction(
+            mode=mode,
+            nli_instruction=nli_instruction,
+            original_premise=(original_sample["premise"].strip() if original_sample else ""),
+            original_hypothesis=(original_sample["hypothesis"].strip() if original_sample else ""),
+            original_label=original_label,
+            operation_description=operation_description,
+            relation_description=relation_description,
+        )
 
     return {
         "instruction": instruction,
@@ -590,22 +619,66 @@ def build_instruction_for_sample(
     }
 
 
+def _build_instruction_v2(mode, original_sample, operation_description,
+                          relation_effect, original_label, nli_instruction):
+    """Frozen legacy (v2) per-mode template path.
+
+    Kept byte-for-byte compatible with the pre-refactor implementation so that
+    ``instruction_template_version: 2`` configs remain reproducible.
+    """
+    template_name = LEGACY_V2_TEMPLATE_FOR_MODE.get(resolve_mode_name(mode))
+    if template_name is None:
+        raise ValueError(f"v2 legacy 模板不支持 mode: {mode}")
+
+    fallback = LEGACY_INSTRUCTION_TEMPLATES_V2["none"].format(nli_instruction=nli_instruction)
+
+    if template_name == "none":
+        return fallback
+
+    if template_name == "operation_only":
+        return LEGACY_INSTRUCTION_TEMPLATES_V2["operation_only"].format(
+            operation_description=operation_description,
+            nli_instruction=nli_instruction,
+        )
+
+    if original_sample is None:
+        return fallback
+
+    fields = {
+        "original_premise": original_sample["premise"].strip(),
+        "original_hypothesis": original_sample["hypothesis"].strip(),
+        "nli_instruction": nli_instruction,
+    }
+    if template_name in ("pair_operation", "shuffled_operation"):
+        fields["operation_description"] = operation_description
+    elif template_name == "relation_aware":
+        fields["operation_description"] = operation_description
+        fields["relation_effect"] = relation_effect
+    elif template_name == "full_oracle":
+        fields["original_label"] = original_label
+        fields["operation_description"] = operation_description
+        fields["relation_effect"] = relation_effect
+    return LEGACY_INSTRUCTION_TEMPLATES_V2[template_name].format(**fields)
+
+
 # ============================================================
 # Shuffled 描述选择
 # ============================================================
-def select_shuffled_descriptions(samples, mr_ids, seed):
+def select_shuffled_descriptions(samples, mr_ids, seed, descriptions=None):
     """为 shuffled_operation 模式打乱操作描述。
 
     保持样本和标签不变，只打乱操作描述。
     确保尽可能不分配回原 MR。
     """
     del mr_ids  # retained for API compatibility
+    if descriptions is None:
+        descriptions = MR_OPERATION_DESCRIPTIONS
     indexed = []
     result = ["none"] * len(samples)
     for index, sample in enumerate(samples):
         mr_id = normalize_mr_id(sample.get("mr_id"))
         if mr_id != "none":
-            description = MR_OPERATION_DESCRIPTIONS.get(mr_id, "")
+            description = descriptions.get(mr_id, "")
             indexed.append((compute_sample_key(sample), index, mr_id, description))
     if not indexed:
         return result
@@ -622,22 +695,24 @@ def select_shuffled_descriptions(samples, mr_ids, seed):
     ordered = ordered[rotation:] + ordered[:rotation]
     assigned = [ordered[(i + offset) % len(ordered)][2] for i in range(len(ordered))]
     for item, assigned_mr in zip(ordered, assigned):
-        if MR_OPERATION_DESCRIPTIONS[assigned_mr] == item[3]:
+        if descriptions[assigned_mr] == item[3]:
             raise ValueError("描述 derangement 出现固定点")
         result[item[1]] = assigned_mr
     return result
 
 
-def build_shuffle_audit(samples, assigned_mr_ids, shuffle_seed):
+def build_shuffle_audit(samples, assigned_mr_ids, shuffle_seed, descriptions=None):
     """Build a deterministic audit for a shuffled-operation assignment."""
+    if descriptions is None:
+        descriptions = MR_OPERATION_DESCRIPTIONS
     augmented_pairs = []
     confusion = defaultdict(Counter)
     for sample, assigned_mr in zip(samples, assigned_mr_ids):
         true_mr = normalize_mr_id(sample.get("mr_id"))
         if true_mr == "none":
             continue
-        true_description = MR_OPERATION_DESCRIPTIONS[true_mr]
-        assigned_description = MR_OPERATION_DESCRIPTIONS[assigned_mr]
+        true_description = descriptions[true_mr]
+        assigned_description = descriptions[assigned_mr]
         augmented_pairs.append({
             "sample_key": compute_sample_key(sample),
             "true_mr_id": true_mr,
@@ -673,6 +748,108 @@ def build_shuffle_audit(samples, assigned_mr_ids, shuffle_seed):
 
 
 # ============================================================
+# v3 grounded control shuffles（确定性，seed 驱动）
+# ============================================================
+def _augmented_buckets(samples, bucket_fn):
+    """Stable keys plus per-row buckets (``None`` = excluded) for a derangement."""
+    keys = [compute_sample_key(s) for s in samples]
+    buckets = [
+        bucket_fn(normalize_mr_id(s.get("mr_id")))
+        for s in samples
+    ]
+    return buckets, keys
+
+
+def select_shuffled_operation_mr_ids(samples, seed):
+    """Deterministically derange the *input-transformation specification*.
+
+    Guarantees ``assigned_mr_id != true_mr_id`` for every augmented row and
+    preserves the mr_id marginals.  Composite rows share one canonical
+    fallback operation text, so a composite -> composite reassignment leaves the
+    rendered text unchanged; that count is reported by
+    :func:`build_grounding_control_audit` rather than hidden.
+    """
+    buckets, keys = _augmented_buckets(samples, lambda mr_id: None if mr_id == "none" else mr_id)
+    return block_derangement(buckets, keys, seed)
+
+
+def select_shuffled_relation_types(samples, seed):
+    """Deterministically derange the *output-relation specification*.
+
+    Buckets are relation types (``inv``/``flip``/``neutral``), so a derangement
+    guarantees the rendered relation text differs from the correct one.  Rows
+    with no official relation definition (unsupported mr_ids) are excluded.
+    """
+    buckets, keys = _augmented_buckets(samples, relation_type_for)
+    return block_derangement(buckets, keys, seed)
+
+
+def build_grounding_control_audit(
+    samples,
+    assigned_mr_ids,
+    assigned_relation_types,
+    seed,
+):
+    """Audit the v3 shuffled controls: identity collisions and rendered-text collisions."""
+    operation_identity_collisions = 0
+    operation_text_unchanged = 0
+    relation_identity_collisions = 0
+    relation_text_unchanged = 0
+    augmented = 0
+
+    for sample, assigned_mr, assigned_type in zip(
+        samples, assigned_mr_ids, assigned_relation_types
+    ):
+        true_mr = normalize_mr_id(sample.get("mr_id"))
+        if true_mr == "none":
+            continue
+        augmented += 1
+
+        if assigned_mr is not None:
+            if assigned_mr == true_mr:
+                operation_identity_collisions += 1
+            if MR_OPERATION_DESCRIPTIONS.get(assigned_mr, "") == MR_OPERATION_DESCRIPTIONS.get(true_mr, ""):
+                operation_text_unchanged += 1
+
+        true_type = relation_type_for(true_mr)
+        if assigned_type is not None:
+            if assigned_type == true_type:
+                relation_identity_collisions += 1
+            if RELATION_TYPE_DESCRIPTIONS.get(assigned_type, "") == RELATION_TYPE_DESCRIPTIONS.get(true_type, ""):
+                relation_text_unchanged += 1
+
+    return {
+        "seed": seed,
+        "total_augmented": augmented,
+        "operation_identity_collision_count": operation_identity_collisions,
+        "operation_text_unchanged_count": operation_text_unchanged,
+        "relation_identity_collision_count": relation_identity_collisions,
+        "relation_text_unchanged_count": relation_text_unchanged,
+        "assigned_operation_mr_counts": dict(sorted(Counter(
+            m for m in assigned_mr_ids if m is not None
+        ).items())),
+        "assigned_relation_type_counts": dict(sorted(Counter(
+            t for t in assigned_relation_types if t is not None
+        ).items())),
+    }
+
+
+def build_mismatched_pair_map(groups):
+    """Map each train group onto the source of a *different* group.
+
+    Used by the ``mismatched_pair`` control: the double-input format and the
+    token budget stay comparable, but the source no longer corresponds to the
+    follow-up sample.
+    """
+    group_keys = sorted((g["group_key"] for g in groups), key=str)
+    if len(group_keys) < 2:
+        raise ValueError("mismatched_pair 控制至少需要 2 个 group")
+    offset = max(1, len(group_keys) // 2)
+    return {key: group_keys[(i + offset) % len(group_keys)]
+            for i, key in enumerate(group_keys)}
+
+
+# ============================================================
 # 转换主函数（支持 instruction mode）
 # ============================================================
 def convert_to_alpaca(
@@ -683,8 +860,11 @@ def convert_to_alpaca(
     operation_descriptions=None,
     relation_effects=None,
     shuffled_descriptions=None,
+    shuffled_relation_types=None,
+    mismatched_pair_map=None,
     strict=False,
     nli_instruction=None,
+    template_version=INSTRUCTION_TEMPLATE_VERSION,
 ):
     """将 NLI 样本转换为 Alpaca 格式，支持 MR instruction 模式。
 
@@ -703,13 +883,35 @@ def convert_to_alpaca(
     """
     if operation_descriptions is None:
         operation_descriptions = {}
+    if relation_effects is None:
+        relation_effects = {}
+
+    canonical_mode = resolve_mode_name(mode)
+    spec = MODE_SPECS[canonical_mode]
+    needs_pair = bool(spec["pair"])
+    needs_operation = bool(spec["operation"])
+    needs_relation = bool(spec["relation"])
+    needs_label_anchor = bool(spec["label_anchor"])
+    operation_source = spec["operation_source"]
+    relation_source = spec["relation_source"]
+    pair_source = spec["pair_source"]
+    legacy = template_version in LEGACY_INSTRUCTION_TEMPLATE_VERSIONS
 
     converted = []
     label_dist = Counter()
     mr_dist = Counter()
     mr_label_dist = Counter()
-    fallback_count = 0
+    operation_provenance_dist = Counter()
+    relation_type_dist = Counter()
+    pair_fallback_count = 0
     missing_operation = 0
+    missing_relation = 0
+    missing_source_label = 0
+    composite_operation_fallback_count = 0
+    shuffled_operation_identity_collisions = 0
+    shuffled_relation_identity_collisions = 0
+    relation_type_mismatch_count = 0
+    label_anchor_used_count = 0
 
     for i, s in enumerate(samples):
         mr_id = normalize_mr_id(s.get("mr_id"))
@@ -722,42 +924,113 @@ def convert_to_alpaca(
             label_name = str(label_val)
         mr_label_dist[(mr_id, label_name)] += 1
 
-        # 确定使用的 mr_id（可能被 shuffled）
-        effective_mr_id = mr_id
-        if mode == "shuffled_operation" and shuffled_descriptions is not None:
-            effective_mr_id = shuffled_descriptions[i]
+        is_source_row = mr_id == "none"
+        relation_type_dist[
+            relation_type_for(mr_id) or ("source_row" if is_source_row else "unsupported")
+        ] += 1
 
-        # 只在实际使用 operation description 的模式检查描述完整性。
+        # ---- operation specification --------------------------------------
+        # ``effective_mr_id`` drives the operation block; it is the correct MR
+        # id except in the shuffled control, where it is the assigned one.
+        effective_mr_id = mr_id
+        if not legacy and operation_source == "shuffled" and shuffled_descriptions is not None:
+            effective_mr_id = shuffled_descriptions[i] or mr_id
+            if not is_source_row and effective_mr_id == mr_id:
+                shuffled_operation_identity_collisions += 1
+
         operation_desc = ""
-        if mode in MODES_REQUIRING_OPERATION:
-            operation_desc = operation_descriptions.get(effective_mr_id, "")
-            if not operation_desc and effective_mr_id != "none":
+        operation_provenance = OPERATION_PROVENANCE_NONE
+        if needs_operation and not is_source_row:
+            if legacy:
+                operation_desc = operation_descriptions.get(effective_mr_id, "")
+                operation_provenance = (
+                    OPERATION_PROVENANCE_EXACT if operation_desc else OPERATION_PROVENANCE_NONE
+                )
+            else:
+                component_mrs = s.get("component_mrs")
+                operation_desc, operation_provenance = resolve_operation_description(
+                    effective_mr_id, component_mrs
+                )
+            if operation_provenance == OPERATION_PROVENANCE_FALLBACK:
+                composite_operation_fallback_count += 1
+            if not operation_desc:
                 missing_operation += 1
                 if strict:
                     raise ValueError(f"缺少操作描述: mr_id={effective_mr_id}")
+        operation_provenance_dist[operation_provenance] += 1
 
-        # 获取关系效果描述（仅某些 mode 需要）
-        relation_effect = ""
-        if mode in MODES_REQUIRING_RELATION_EFFECT:
-            relation_effect = relation_effects.get(effective_mr_id, "") if relation_effects else ""
+        # ---- relation specification ---------------------------------------
+        relation_desc = ""
+        assigned_relation_type = None
+        if needs_relation and not is_source_row:
+            if legacy:
+                relation_desc = relation_effects.get(effective_mr_id, "")
+            else:
+                if relation_source == "shuffled" and shuffled_relation_types is not None:
+                    assigned_relation_type = shuffled_relation_types[i]
+                    true_type = relation_type_for(mr_id)
+                    if assigned_relation_type is not None:
+                        if assigned_relation_type == true_type:
+                            shuffled_relation_identity_collisions += 1
+                        relation_desc = RELATION_TYPE_DESCRIPTIONS.get(assigned_relation_type, "")
+                    else:
+                        relation_desc = resolve_relation_description(mr_id)
+                else:
+                    relation_desc = resolve_relation_description(mr_id)
+            if not relation_desc:
+                missing_relation += 1
+                if strict:
+                    raise ValueError(f"缺少 relation 描述: mr_id={mr_id}")
 
-        # 获取原始样本（用于 pair 相关 mode）
+        # ---- pair grounding ------------------------------------------------
         original_sample = None
         original_label = ""
-        if original_map is not None and mode not in ("none", "operation_only"):
+        if needs_pair and not is_source_row:
             group_key = s.get("_group_key")
-            if group_key is not None:
-                original_sample = original_map.get(group_key)
+            lookup_key = group_key
+            if pair_source == "mismatched" and group_key is not None and mismatched_pair_map:
+                lookup_key = mismatched_pair_map.get(group_key, group_key)
+            if lookup_key is not None:
+                original_sample = original_map.get(lookup_key) if original_map else None
             if original_sample is None:
-                fallback_count += 1
+                pair_fallback_count += 1
+                if strict:
+                    raise ValueError(f"Pair 模式缺少 source sample: group={group_key}")
+            # Guard against the mismatched control collapsing onto the true pair.
+            if pair_source == "mismatched" and original_sample is not None:
+                true_source = original_map.get(group_key) if original_map else None
+                if true_source is original_sample:
+                    raise ValueError("mismatched_pair 控制退化成了正确配对")
 
-        # 获取原始标签（仅 full_oracle）
-        if mode == "full_oracle" and original_sample is not None:
-            ol = original_sample.get("label")
-            if isinstance(ol, int):
-                original_label = label_names.get(ol, str(ol))
+        # ---- label anchor (diagnostic only) ---------------------------------
+        if needs_label_anchor and not is_source_row:
+            if original_sample is None:
+                missing_source_label += 1
+                if strict:
+                    raise ValueError("label_anchor 需要 source sample，但未找到")
             else:
-                original_label = str(ol)
+                ol = original_sample.get("label")
+                if isinstance(ol, int):
+                    original_label = label_names.get(ol, str(ol))
+                elif ol is None:
+                    missing_source_label += 1
+                    if strict:
+                        raise ValueError("label_anchor 需要 source label，但缺失")
+                else:
+                    original_label = str(ol)
+            if original_label:
+                label_anchor_used_count += 1
+
+        # ---- training-time label-leak guard ---------------------------------
+        # The target label must always be the current sample's label; the
+        # source/reference label must never reach a core 2x2x2 cell.
+        if not legacy and spec["role"] == "core" and original_label:
+            raise ValueError("核心 2x2x2 条件不得包含 source label")
+
+        # ---- legacy v2 shuffled path ---------------------------------------
+        if legacy and mode in ("pair_shuffled_operation", "shuffled_operation") \
+                and shuffled_descriptions is not None and not is_source_row:
+            effective_mr_id = shuffled_descriptions[i] or mr_id
 
         # 构建 Alpaca 格式
         result = build_instruction_for_sample(
@@ -765,12 +1038,20 @@ def convert_to_alpaca(
             original_sample=original_sample,
             mode=mode,
             operation_description=operation_desc,
-            relation_effect=relation_effect,
+            relation_effect=relation_desc,
+            relation_description=relation_desc,
             original_label=original_label,
             is_binary=is_binary,
-            is_original=(effective_mr_id == "none"),
+            is_original=is_source_row,
             nli_instruction=nli_instruction,
+            template_version=template_version,
         )
+
+        # ---- relation-type consistency check (data self-audit) --------------
+        declared = normalize_mr_id(s.get("mr_type")) if s.get("mr_type") else None
+        expected = relation_type_for(mr_id)
+        if declared and expected and declared != expected:
+            relation_type_mismatch_count += 1
 
         converted.append(result)
         label_dist[result["output"]] += 1
@@ -780,8 +1061,30 @@ def convert_to_alpaca(
         "label_distribution": dict(label_dist),
         "mr_distribution": dict(mr_dist),
         "mr_label_cross": serialize_counter_keys(mr_label_dist),
-        "fallback_count": fallback_count,
+        "canonical_mode": canonical_mode,
+        "requested_mode": mode,
+        "template_version": template_version,
+        "pair_present": needs_pair,
+        "operation_present": needs_operation,
+        "relation_present": needs_relation,
+        "label_anchor_present": needs_label_anchor,
+        "grounding_status": grounding_status(spec),
+        "pair_source": pair_source,
+        "operation_source": operation_source,
+        "relation_source": relation_source,
+        "mode_role": spec["role"],
+        "fallback_count": pair_fallback_count,
+        "pair_fallback_count": pair_fallback_count,
         "missing_operation_count": missing_operation,
+        "missing_relation_count": missing_relation,
+        "missing_source_label_count": missing_source_label,
+        "label_anchor_used_count": label_anchor_used_count,
+        "composite_operation_fallback_count": composite_operation_fallback_count,
+        "shuffled_operation_identity_collision_count": shuffled_operation_identity_collisions,
+        "shuffled_relation_identity_collision_count": shuffled_relation_identity_collisions,
+        "relation_type_mismatch_count": relation_type_mismatch_count,
+        "operation_provenance_distribution": dict(sorted(operation_provenance_dist.items())),
+        "relation_type_distribution": dict(sorted(relation_type_dist.items())),
     }
 
     return converted, report
@@ -1090,13 +1393,30 @@ def generate_conversion_report(
         "=" * 60,
         "  Conversion Report",
         "=" * 60,
-        f"  Mode: {mode}",
+        f"  Mode: {mode}  (canonical: {report_data.get('canonical_mode', mode)})",
+        f"  Template version: {report_data.get('template_version', '?')}",
         f"  Source files: {source_files}",
         f"  Seed: {seed}",
         f"  Groups: {groups_count}",
         f"  Total samples: {report_data.get('total', 0)}",
-        f"  Fallback count: {report_data.get('fallback_count', 0)}",
-        f"  Missing operation desc: {report_data.get('missing_operation_count', 0)}",
+        "",
+        "  -- Experimental design (P/O/R/L) --",
+        f"    Pair (P):          {report_data.get('pair_present')}  [{report_data.get('pair_source')}]",
+        f"    Operation (O):     {report_data.get('operation_present')}  [{report_data.get('operation_source')}]",
+        f"    Relation (R):      {report_data.get('relation_present')}  [{report_data.get('relation_source')}]",
+        f"    Label anchor (L):  {report_data.get('label_anchor_present')}",
+        f"    Grounding:         {report_data.get('grounding_status')}",
+        f"    Role:              {report_data.get('mode_role')}",
+        "",
+        "  -- Design integrity --",
+        f"    Pair fallback:                    {report_data.get('pair_fallback_count', 0)}",
+        f"    Missing operation desc:           {report_data.get('missing_operation_count', 0)}",
+        f"    Missing relation desc:            {report_data.get('missing_relation_count', 0)}",
+        f"    Missing source label:             {report_data.get('missing_source_label_count', 0)}",
+        f"    Composite operation fallback:     {report_data.get('composite_operation_fallback_count', 0)}",
+        f"    Shuffled operation id collisions: {report_data.get('shuffled_operation_identity_collision_count', 0)}",
+        f"    Shuffled relation id collisions:  {report_data.get('shuffled_relation_identity_collision_count', 0)}",
+        f"    Relation-type mismatches:         {report_data.get('relation_type_mismatch_count', 0)}",
         "",
         "  Label distribution:",
     ]
@@ -1109,6 +1429,13 @@ def generate_conversion_report(
         lines.append("  MR distribution:")
         for mr_id, count in sorted(mr_dist.items()):
             lines.append(f"    {mr_id}: {count}")
+
+    provenance = report_data.get("operation_provenance_distribution") or {}
+    if provenance:
+        lines.append("")
+        lines.append("  Operation provenance:")
+        for name, count in sorted(provenance.items()):
+            lines.append(f"    {name}: {count}")
 
     if instruction_lengths:
         lines.append("")
@@ -1254,7 +1581,11 @@ def parse_args():
     parser.add_argument("--mr-instruction-mode",
                         choices=sorted(MR_INSTRUCTION_MODES),
                         default="none",
-                        help="MR instruction 模式（默认: none）")
+                        help="MR instruction 模式（默认: none）。"
+                             f"核心 2x2x2: {list(CORE_MODES)}; "
+                             f"控制: {list(CONTROL_MODES)}; "
+                             f"diagnostic: {list(DIAGNOSTIC_MODES)}; "
+                             f"deprecated 别名: {list(MODE_ALIASES)}")
     parser.add_argument("--strict-pairing", action="store_true", default=False,
                         help="严格配对模式：未知 mr_id、缺失 source 等直接报错")
     parser.add_argument("--split-manifest", type=str, default=None,
@@ -1294,12 +1625,15 @@ def main():
     args = parse_args()
     random.seed(args.seed)
 
-    if args.instruction_template_version != INSTRUCTION_TEMPLATE_VERSION:
+    supported_versions = (INSTRUCTION_TEMPLATE_VERSION,) + LEGACY_INSTRUCTION_TEMPLATE_VERSIONS
+    if args.instruction_template_version not in supported_versions:
         raise ValueError(
             "不支持的 instruction template version: "
             f"{args.instruction_template_version}; "
-            f"当前仅支持 v{INSTRUCTION_TEMPLATE_VERSION}"
+            f"当前支持 v{INSTRUCTION_TEMPLATE_VERSION} (current) 与 "
+            f"{list(LEGACY_INSTRUCTION_TEMPLATE_VERSIONS)} (frozen legacy)"
         )
+    template_version = args.instruction_template_version
 
     # 兼容旧版 --binary（RTE 已移除，但仍保持功能以防外部调用）
     is_binary = args.binary if args.binary is not None else False
@@ -1308,6 +1642,17 @@ def main():
         print("  ⚠️  二分类模式已启用。注意：RTE 已从主实验中移除。")
 
     mode = args.mr_instruction_mode
+    canonical_mode = resolve_mode_name(mode)
+    if mode in MODE_ALIASES:
+        print(
+            f"  ⚠️  {mode} is deprecated; use {MODE_ALIASES[mode]}. "
+            f"（已映射到 {MODE_ALIASES[mode]}）"
+        )
+    if template_version in LEGACY_INSTRUCTION_TEMPLATE_VERSIONS:
+        print(
+            f"  ⚠️  instruction template version {template_version} 为冻结的 legacy 版本；"
+            f"新的 grounded 2x2x2 设计请使用 v{INSTRUCTION_TEMPLATE_VERSION}"
+        )
     active_manifest = None
 
     # 确定使用的 label_names 和 nli instruction
@@ -1470,43 +1815,80 @@ def main():
     # ============================
     # 7. 生成 shuffled 描述（若需要）
     # ============================
+    op_map, rel_map = descriptions_for_version(template_version)
+    active_spec = MODE_SPECS[canonical_mode]
+    train_samples = sort_samples_by_stable_key(flatten_groups(train_groups))
+
     shuffled_descriptions = None
+    shuffled_relation_types = None
+    mismatched_pair_map = None
     shuffle_audit = None
-    if mode == "shuffled_operation":
-        train_samples_flat = sort_samples_by_stable_key(flatten_groups(train_groups))
-        all_mr_ids = set(normalize_mr_id(s.get("mr_id")) for s in all_samples)
-        shuffle_seed = args.seed + 999
-        shuffled_descriptions = select_shuffled_descriptions(
-            train_samples_flat, all_mr_ids, seed=shuffle_seed
-        )
-        shuffle_audit = build_shuffle_audit(
-            train_samples_flat,
-            shuffled_descriptions,
-            shuffle_seed,
-        )
-        print(f"  🔀 Shuffled operation descriptions 已生成")
+    grounding_control_audit = None
+    shuffle_seed = args.seed + 999
+
+    if template_version in LEGACY_INSTRUCTION_TEMPLATE_VERSIONS:
+        if active_spec["operation_source"] == "shuffled":
+            all_mr_ids = set(normalize_mr_id(s.get("mr_id")) for s in all_samples)
+            shuffled_descriptions = select_shuffled_descriptions(
+                train_samples, all_mr_ids, seed=shuffle_seed, descriptions=op_map
+            )
+            shuffle_audit = build_shuffle_audit(
+                train_samples, shuffled_descriptions, shuffle_seed, descriptions=op_map
+            )
+            print("  🔀 Shuffled operation descriptions 已生成（legacy v2 策略）")
+    else:
+        if active_spec["operation_source"] == "shuffled":
+            shuffled_descriptions = select_shuffled_operation_mr_ids(train_samples, shuffle_seed)
+        if active_spec["relation_source"] == "shuffled":
+            shuffled_relation_types = select_shuffled_relation_types(train_samples, shuffle_seed)
+        if active_spec["pair_source"] == "mismatched":
+            mismatched_pair_map = build_mismatched_pair_map(train_groups)
+        if shuffled_descriptions is not None or shuffled_relation_types is not None:
+            grounding_control_audit = build_grounding_control_audit(
+                train_samples,
+                shuffled_descriptions or [None] * len(train_samples),
+                shuffled_relation_types or [None] * len(train_samples),
+                shuffle_seed,
+            )
+            print(
+                "  🔀 Grounded control shuffles 已生成: "
+                f"operation_id_collisions="
+                f"{grounding_control_audit['operation_identity_collision_count']}, "
+                f"relation_id_collisions="
+                f"{grounding_control_audit['relation_identity_collision_count']}"
+            )
+        if mismatched_pair_map is not None:
+            print(f"  🔀 Mismatched pair map 已生成: {len(mismatched_pair_map)} groups")
 
     # ============================
     # 8. 转换：训练集（按指定 mode）
     # ============================
-    train_samples = sort_samples_by_stable_key(flatten_groups(train_groups))
-    print(f"\n  🔄 转换训练集（mode={mode}）: {len(train_samples)} 条")
-
-    # 准备操作描述 map（过滤掉不在 ANY_MR 中的 key）
-    op_map = {k: v for k, v in MR_OPERATION_DESCRIPTIONS.items()}
-    rel_map = {k: v for k, v in MR_RELATION_EFFECTS.items()}
+    print(f"\n  🔄 转换训练集（mode={mode} → {canonical_mode}）: {len(train_samples)} 条")
 
     train_converted, train_report = convert_to_alpaca(
         train_samples,
-        mode=mode,
+        mode=canonical_mode if template_version not in LEGACY_INSTRUCTION_TEMPLATE_VERSIONS else mode,
         is_binary=is_binary,
-        original_map=original_map if mode not in ("none", "operation_only") else None,
+        original_map=original_map if active_spec["pair"] else None,
         operation_descriptions=op_map,
-        relation_effects=rel_map if mode in MODES_REQUIRING_RELATION_EFFECT else None,
+        relation_effects=rel_map if active_spec["relation"] else None,
         shuffled_descriptions=shuffled_descriptions,
+        shuffled_relation_types=shuffled_relation_types,
+        mismatched_pair_map=mismatched_pair_map,
         strict=args.strict_pairing,
         nli_instruction=nli_instruction,
+        template_version=template_version,
     )
+
+    if args.strict_pairing:
+        for field in (
+            "operation_identity_collision_count",
+            "relation_identity_collision_count",
+        ):
+            if grounding_control_audit and grounding_control_audit.get(field):
+                raise ValueError(
+                    f"Strict 模式: shuffled 控制出现 identity collision ({field})"
+                )
 
     print(f"  📈 训练集标签分布: {dict(train_report['label_distribution'])}")
 
@@ -1525,6 +1907,7 @@ def main():
             is_binary=is_binary,
             strict=False,
             nli_instruction=nli_instruction,
+            template_version=template_version,
         )
         print(f"  📈 验证集标签分布: {dict(val_report.get('label_distribution', {}))}")
 
@@ -1602,10 +1985,44 @@ def main():
         },
         "data_signature": compute_data_signature(all_samples),
         "manifest_hash": active_manifest.get("sha256") if active_manifest else None,
-        "instruction_template_version": INSTRUCTION_TEMPLATE_VERSION,
+        "instruction_template_version": template_version,
         "instruction_template_hash": INSTRUCTION_TEMPLATE_HASH,
         "operation_description_hash": OPERATION_DESCRIPTION_HASH,
         "relation_effect_hash": RELATION_EFFECT_HASH,
+        # Experimental design metadata: never re-derive P/O/R/L from the mode name.
+        "mr_design": {
+            **mode_design_meta(mode),
+            "template_version": template_version,
+            "pair_present": train_report.get("pair_present"),
+            "operation_present": train_report.get("operation_present"),
+            "relation_present": train_report.get("relation_present"),
+            "label_anchor_present": train_report.get("label_anchor_present"),
+            "grounding_status": train_report.get("grounding_status"),
+        },
+        "design_integrity": {
+            "pair_fallback_count": train_report.get("pair_fallback_count", 0),
+            "missing_operation_count": train_report.get("missing_operation_count", 0),
+            "missing_relation_count": train_report.get("missing_relation_count", 0),
+            "missing_source_label_count": train_report.get("missing_source_label_count", 0),
+            "composite_operation_fallback_count": train_report.get(
+                "composite_operation_fallback_count", 0
+            ),
+            "shuffled_operation_identity_collision_count": train_report.get(
+                "shuffled_operation_identity_collision_count", 0
+            ),
+            "shuffled_relation_identity_collision_count": train_report.get(
+                "shuffled_relation_identity_collision_count", 0
+            ),
+            "relation_type_mismatch_count": train_report.get(
+                "relation_type_mismatch_count", 0
+            ),
+            "operation_provenance_distribution": train_report.get(
+                "operation_provenance_distribution", {}
+            ),
+            "relation_type_distribution": train_report.get(
+                "relation_type_distribution", {}
+            ),
+        },
         "ordered_sample_signature": compute_ordered_sample_signature(
             train_samples,
             val_samples,
@@ -1615,8 +2032,10 @@ def main():
             converted_rows_sha256(val_converted) if val_converted else None
         ),
         "token_length": token_report,
-        "upper_bound": mode == "full_oracle",
+        "upper_bound": canonical_mode == "full_oracle",
         "shuffle_audit": shuffle_audit,
+        "grounding_control_audit": grounding_control_audit,
+        "mismatched_pair_used": mismatched_pair_map is not None,
     }
     report_path.write_text(json.dumps(report_json, indent=2, ensure_ascii=False))
     print(f"  📊 转换报告: {report_path}")

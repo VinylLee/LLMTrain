@@ -43,6 +43,9 @@ ROLE_TRAIN_SOURCE_POOL = "train_source_pool"
 ROLE_COMMON_DEV = "common_dev"
 ROLE_STANDARD_TEST = "standard_test"
 ROLE_MR_TEST_SOURCE_POOL = "mr_test_source_pool"
+#: Auxiliary artifact: human-written (source, counterfactual) pairs.  Never a
+#: training or test split; it exists as a quality reference for the flip MRs.
+ROLE_HUMAN_CAD_PAIRS = "human_cad_pairs"
 SA_ROLES: tuple[str, ...] = (
     ROLE_TRAIN_SOURCE_POOL,
     ROLE_COMMON_DEV,
@@ -286,6 +289,41 @@ def parse_twitter_tsv(raw: bytes) -> ParseResult:
     )
 
 
+def parse_cad_paired_tsv(raw: bytes) -> ParseResult:
+    """PairCFR combined CAD file: ``Sentiment\\tText\\tbatch_id``, two rows per batch.
+
+    The first row of each batch is the original review and the second is the
+    human-written counterfactual, so the batch id is the pairing key.
+    """
+    reader = csv.DictReader(io.StringIO(_decode(raw)), delimiter="\t")
+    fieldnames = {(name or "").strip() for name in (reader.fieldnames or [])}
+    if not {"Sentiment", "Text", "batch_id"} <= fieldnames:
+        raise SADatasetError(f"unexpected paired CAD header: {sorted(fieldnames)}")
+    records: list[ParsedRecord] = []
+    batch_ids: list[str] = []
+    for offset, row in enumerate(reader, start=1):
+        label = POS_NEG_WORD_LABELS.get((row.get("Sentiment") or "").strip().casefold())
+        if label is None:
+            raise SADatasetError(f"paired CAD row {offset}: unknown label {row.get('Sentiment')!r}")
+        text = normalize_text(row.get("Text") or "")
+        if not text:
+            raise SADatasetError(f"paired CAD row {offset}: empty text")
+        batch_id = str(row.get("batch_id") or "").strip()
+        if not batch_id:
+            raise SADatasetError(f"paired CAD row {offset}: missing batch_id")
+        records.append(ParsedRecord(text=text, label=label, source_file_index=offset))
+        batch_ids.append(batch_id)
+    return _finalize(
+        records,
+        {
+            "format": "cad_paired_tsv",
+            "label_encoding": "Positive/Negative",
+            "pair_key": "batch_id",
+            "batch_ids": batch_ids,
+        },
+    )
+
+
 def parse_label_text_csv(raw: bytes) -> ParseResult:
     """Amazon-style CSV: header ``label,context`` with 0/1 labels."""
     reader = csv.DictReader(io.StringIO(_decode(raw)))
@@ -337,6 +375,7 @@ def parse_imdb_parquet(raw: bytes) -> ParseResult:
 
 PARSERS: dict[str, Callable[[bytes], ParseResult]] = {
     "cad_tsv": parse_cad_tsv,
+    "cad_paired_tsv": parse_cad_paired_tsv,
     "sst2_tsv": parse_sst2_tsv,
     "twitter_tsv": parse_twitter_tsv,
     "label_text_csv": parse_label_text_csv,
@@ -403,13 +442,16 @@ IMDB = SADatasetSpec(
             note="in-domain test; also serves as the MR source pool (see deviations)",
         ),
         SASourceSpec(
-            role="human_cad_reference",
-            filename="revised17_train.tsv",
-            url=f"{_PAIRCFR_RAW}/revised17/train.tsv",
-            parser="cad_tsv",
-            id_prefix="imdb-cadrev-train",
-            expected_rows=1707,
-            note="human counterfactuals; quality reference for flip MRs, never a test set",
+            role=ROLE_HUMAN_CAD_PAIRS,
+            filename="combined34_train_paired.tsv",
+            url=f"{_PAIRCFR_RAW}/combined34/train_paired.tsv",
+            parser="cad_paired_tsv",
+            id_prefix="imdb-cad",
+            expected_rows=3414,
+            note=(
+                "human (source, counterfactual) pairs keyed by batch_id; the natural "
+                "quality reference for the two flip MRs, never a training or test split"
+            ),
         ),
     ),
     standard_test_is_mr_pool=True,
@@ -491,7 +533,7 @@ SST2 = SADatasetSpec(
             url=_hf_file("gpt3mix/sst2", "data/test.tsv"),
             parser="sst2_tsv",
             id_prefix="sst2-test",
-            expected_rows=1820,
+            expected_rows=1821,
         ),
     ),
     mr_pool_size=400,
@@ -624,11 +666,70 @@ def build_domain_splits(
         if role in parsed_by_role:
             splits[role] = rows_for(role)
 
-    for role in ("human_cad_reference",):
-        if role in parsed_by_role:
-            splits[role] = rows_for(role)
-
     return splits, assembly
+
+
+def build_human_cad_pairs(
+    parsed: ParseResult, source_meta: Mapping[str, Any]
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Turn the paired CAD file into ``(source, counterfactual)`` records.
+
+    Also checks the pairs against ``train_source_pool`` in file order: the CAD
+    original rows are the training cohort, so if they line up we know the human
+    reference is aligned with the sources this project actually trains on.
+    """
+    batch_ids = parsed.meta.get("batch_ids")
+    if not batch_ids or len(batch_ids) != len(parsed.records):
+        raise SADatasetError("paired CAD parse result is missing aligned batch_ids")
+
+    grouped: dict[str, list[ParsedRecord]] = {}
+    for record, batch_id in zip(parsed.records, batch_ids):
+        grouped.setdefault(batch_id, []).append(record)
+
+    pairs: list[dict[str, Any]] = []
+    for batch_id, members in grouped.items():
+        if len(members) != 2:
+            raise SADatasetError(
+                f"paired CAD batch {batch_id!r} has {len(members)} rows; expected exactly two"
+            )
+        original, counterfactual = members
+        if original.label == counterfactual.label:
+            raise SADatasetError(
+                f"paired CAD batch {batch_id!r} has matching labels; a counterfactual "
+                "must invert the original polarity"
+            )
+        pairs.append(
+            {
+                "dataset": "imdb",
+                "batch_id": batch_id,
+                "source_text": original.text,
+                "source_label": original.label,
+                "counterfactual_text": counterfactual.text,
+                "counterfactual_label": counterfactual.label,
+                "source_file": source_meta["filename"],
+                "source_file_sha256": source_meta["sha256"],
+            }
+        )
+    return pairs, {"pair_count": len(pairs), "batches_with_unexpected_size": 0}
+
+
+def check_human_pairs_alignment(
+    pairs: Sequence[Mapping[str, Any]], train_source_pool: Sequence[Mapping[str, Any]]
+) -> dict[str, Any]:
+    """How far the human-pair originals line up with the training cohort, in order."""
+    limit = min(len(pairs), len(train_source_pool))
+    matching = sum(
+        1
+        for index in range(limit)
+        if pairs[index]["source_text"] == train_source_pool[index]["text"]
+    )
+    return {
+        "compared": limit,
+        "matching_in_file_order": matching,
+        "aligned": limit > 0 and matching == limit,
+        "reference_rows": len(pairs),
+        "train_source_pool_rows": len(train_source_pool),
+    }
 
 
 def label_counts(rows: Iterable[Mapping[str, Any]]) -> dict[str, int]:

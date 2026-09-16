@@ -235,6 +235,11 @@ def load_records(path: Path) -> list[dict[str, Any]]:
             if isinstance(candidate, list):
                 parsed = candidate
                 break
+        else:
+            # A JSONL file holding exactly one record parses as a bare object.
+            # Under this function's contract that is still valid input, so treat
+            # it as a single-record file rather than rejecting it.
+            parsed = [parsed]
     if not isinstance(parsed, list) or not all(isinstance(item, dict) for item in parsed):
         raise ValueError("Input must be a JSON array of objects or JSONL objects")
     return parsed

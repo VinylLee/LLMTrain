@@ -158,6 +158,7 @@ def import_domain(
 ) -> dict[str, Any]:
     dataset_dir = raw_root / spec.dataset
     parsed_by_role: dict[str, registry.ParseResult] = {}
+    parsed_pairs: dict[str, registry.ParseResult] = {}
     source_meta: dict[str, dict[str, Any]] = {}
     source_records: list[dict[str, Any]] = []
 
@@ -179,7 +180,10 @@ def import_domain(
                     "Re-run with --force-download to accept the new revision."
                 )
         parsed = registry.parse_source(source_spec.parser, destination.read_bytes())
-        parsed_by_role[source_spec.role] = parsed
+        if source_spec.role == registry.ROLE_HUMAN_CAD_PAIRS:
+            parsed_pairs[source_spec.role] = parsed
+        else:
+            parsed_by_role[source_spec.role] = parsed
 
         expected = source_spec.expected_rows
         source_records.append(
@@ -225,6 +229,25 @@ def import_domain(
         }
 
     checks = build_dataset_checks(spec, splits)
+    auxiliary: dict[str, Any] = {}
+
+    for role, parsed in parsed_pairs.items():
+        pairs, pair_meta = registry.build_human_cad_pairs(parsed, source_meta[role])
+        pairs_path = dataset_out / f"{role}.jsonl"
+        write_jsonl(pairs_path, pairs)
+        auxiliary[role] = {
+            "path": str(pairs_path.relative_to(PROJECT_ROOT)),
+            "pairs": len(pairs),
+            "sha256": file_sha256(pairs_path),
+            "role": (
+                "Human-written counterfactuals for the same cohort. Quality reference for "
+                "the flip MRs only; never used for training or as a test split."
+            ),
+            **pair_meta,
+        }
+        checks["human_cad_reference"] = registry.check_human_pairs_alignment(
+            pairs, splits.get(registry.ROLE_TRAIN_SOURCE_POOL, [])
+        )
 
     return {
         "display_name": spec.display_name,
@@ -235,6 +258,7 @@ def import_domain(
         "splits": split_records,
         "assembly": assembly,
         "checks": checks,
+        "auxiliary": auxiliary,
         "deviations": registry.build_deviations(spec),
     }
 

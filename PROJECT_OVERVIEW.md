@@ -454,6 +454,7 @@ Gemma 是 gated 仓库；首次下载前需接受模型协议，并在当前环�
 - ✅ `scripts/run_batch_experiments.py` 更新：MR mode 传播、cohort-based manifest 共享、experiment meta 扩展；
 - ✅ RTE 已从实验配置和测试脚本中移除；
 - ✅ `tests/test_convert_nli_to_ft.py` 新增 23 个单元测试覆盖 split、instruction、strict 模式。
+- ✅ **RQ2 MR-information 设计重构（grounding-aware 2×2×2，2026-09-15）**：新增 `scripts/mr_instruction_design.py` 作为唯一真源（`PAIR/OPERATION/RELATION/LABEL_ANCHOR` 固定 block、`MODE_SPECS` 模式注册表、operation/relation specification、确定性 derangement、instruction 组合器）；`scripts/convert_nli_to_ft.py` 的 instruction 版本升到 v3，模板由注册表派生，v2 旧模板冻结保留供历史 config 复现；新增 `relation_only` / `operation_relation` / `pair_relation` / `full_specification` / `pair_shuffled_operation` / `pair_shuffled_relation` / `mismatched_pair`；`relation_aware` / `shuffled_operation` 成为精确别名；conversion report 与 experiment meta 记录显式 P/O/R/L 设计信息与完整性计数。设计与关系审计见 `RQ2/RQ2_INSTRUCTION_DESIGN.md`、`RQ2/MR_RELATION_AUDIT.md`；快照工具 `scripts/inspect_rq2_instructions.py`；测试 `tests/test_rq2_instruction_design.py`。
 
 ## 10. 后续工作建议
 

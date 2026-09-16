@@ -63,6 +63,11 @@ from sample_mettrain_pairid import (
     compute_data_signature as compute_sampling_data_signature,
 )
 
+from mr_instruction_design import (  # noqa: E402
+    INSTRUCTION_DESIGN_VERSION,
+    mode_design_meta,
+)
+
 WORK_DIR = PROJECT_ROOT
 DEFAULT_OUTPUT_ROOT = WORK_DIR / "output" / "experiments"
 
@@ -684,9 +689,15 @@ def save_experiment_meta(exp, model_name, template, output_root, config):
         "output_root": str(output_root),
         # MR-instruction 相关
         "mr_instruction_mode": exp.get("mr_instruction_mode", "none"),
+        # P/O/R/L design metadata: recorded explicitly so downstream analysis
+        # never has to re-derive the design from the mode name.
+        "mr_design": {
+            **mode_design_meta(exp.get("mr_instruction_mode", "none")),
+            "template_version": config.get("instruction_template_version", 3),
+        },
         "cohort_id": exp.get("cohort_id"),
         "strict_pairing": exp.get("strict_pairing", False),
-        "instruction_template_version": config.get("instruction_template_version", 2),
+        "instruction_template_version": config.get("instruction_template_version", INSTRUCTION_DESIGN_VERSION),
         "research_status": config.get("research_status"),
         "conda_environment": "llmtrain310",
     }
@@ -860,7 +871,7 @@ def run_experiment(exp, config, output_root, progress_file, selected_steps,
             "--cutoff-len", exp.get("cutoff_len", 512),
             "--mr-instruction-mode", mr_mode,
             "--instruction-template-version",
-            config.get("instruction_template_version", 2),
+            config.get("instruction_template_version", INSTRUCTION_DESIGN_VERSION),
         ]
         if is_binary:
             convert_cmd.append("--binary")
