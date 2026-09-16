@@ -16,6 +16,8 @@ NOTE: these assertions use a purpose-built fixture.  The *real* cohort is
 dominated by composite MRs whose component provenance is absent, which is why
 the Operation text in this fixture is a plain single-transformation sentence.
 """
+import hashlib
+import json
 import sys
 from pathlib import Path
 
@@ -23,6 +25,16 @@ import pytest
 
 SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "scripts"
 sys.path.insert(0, str(SCRIPTS_DIR))
+
+# This module pins every assertion to the FROZEN v3 design (`template_version=3`).
+# v4 has its own test module (tests/test_rq2_v4_instruction_design.py).
+_V3 = 3
+
+
+def convert_v3(samples, **kwargs):
+    """convert_to_alpaca pinned to the frozen v3 design."""
+    kwargs.setdefault("template_version", _V3)
+    return convert_to_alpaca(samples, **kwargs)
 
 import convert_nli_to_ft as converter  # noqa: E402
 from convert_nli_to_ft import (  # noqa: E402
@@ -81,7 +93,7 @@ FLIP_FOLLOWUP = {
 }
 
 
-def render(sample, mode, original=SOURCE, original_label="", op=None, rel=None):
+def render(sample, mode, original=SOURCE, original_label="", op=None, rel=None, version=3):
     mr_id = sample["mr_id"]
     if op is None:
         op, _ = resolve_operation_description(mr_id, sample.get("component_mrs"))
@@ -95,6 +107,7 @@ def render(sample, mode, original=SOURCE, original_label="", op=None, rel=None):
         relation_description=rel,
         original_label=original_label,
         is_original=(mr_id == "none"),
+        template_version=version,
     )["instruction"]
 
 
@@ -416,8 +429,8 @@ def test_shuffled_controls_change_specs_but_not_targets(
         relation_effects=MR_RELATION_DESCRIPTIONS,
     )
 
-    plain, _ = convert_to_alpaca(rows, mode=correct_mode, **kwargs)
-    shuffled, _ = convert_to_alpaca(
+    plain, _ = convert_v3(rows, mode=correct_mode, **kwargs)
+    shuffled, _ = convert_v3(
         rows, mode=shuffled_mode, **{**kwargs, payload_key: payload[payload_key]}
     )
     # identical training targets and identical current samples
@@ -433,11 +446,11 @@ def test_shuffled_payload_is_ignored_by_correct_modes():
     """A mode whose spec says `correct` must not honour a shuffled payload."""
     rows, _, original_map = dataset()
     ops = select_shuffled_operation_mr_ids(rows, 1041)
-    plain, _ = convert_to_alpaca(
+    plain, _ = convert_v3(
         rows, mode="pair_operation", original_map=original_map,
         operation_descriptions=MR_OPERATION_DESCRIPTIONS,
     )
-    with_payload, _ = convert_to_alpaca(
+    with_payload, _ = convert_v3(
         rows, mode="pair_operation", original_map=original_map,
         operation_descriptions=MR_OPERATION_DESCRIPTIONS,
         shuffled_descriptions=ops,
@@ -461,7 +474,7 @@ def test_shuffled_control_audit_reports_collisions():
 @pytest.mark.parametrize("mode", CORE_MODES)
 def test_report_records_design_metadata(mode):
     rows, _, original_map = dataset()
-    _, report = convert_to_alpaca(
+    _, report = convert_v3(
         rows, mode=mode, original_map=original_map,
         operation_descriptions=MR_OPERATION_DESCRIPTIONS,
         relation_effects=MR_RELATION_DESCRIPTIONS,
@@ -486,7 +499,7 @@ def test_report_records_design_metadata(mode):
 
 def test_composite_operation_fallback_is_counted():
     rows, _, original_map = dataset()
-    _, report = convert_to_alpaca(
+    _, report = convert_v3(
         rows, mode="pair_operation", original_map=original_map,
         operation_descriptions=MR_OPERATION_DESCRIPTIONS,
     )
@@ -501,7 +514,7 @@ def test_composite_operation_fallback_is_counted():
 def test_strict_mode_fails_when_pair_source_is_missing():
     rows, _, _ = dataset()
     with pytest.raises(ValueError, match="缺少 source sample"):
-        convert_to_alpaca(
+        convert_v3(
             rows, mode="pair_operation", original_map={},
             operation_descriptions=MR_OPERATION_DESCRIPTIONS, strict=True,
         )
@@ -513,7 +526,7 @@ def test_strict_mode_fails_when_required_operation_is_missing():
     rows = [dict(r) for r in rows]
     rows[-1]["mr_id"] = "mystery_mr"
     with pytest.raises(ValueError, match="缺少操作描述"):
-        convert_to_alpaca(rows, mode="operation_only", strict=True)
+        convert_v3(rows, mode="operation_only", strict=True)
 
 
 def test_strict_mode_fails_when_required_relation_is_missing():
@@ -521,7 +534,7 @@ def test_strict_mode_fails_when_required_relation_is_missing():
     rows = [dict(r) for r in rows]
     rows[-1]["mr_id"] = "mystery_mr"
     with pytest.raises(ValueError, match="缺少 relation 描述"):
-        convert_to_alpaca(rows, mode="relation_only", strict=True)
+        convert_v3(rows, mode="relation_only", strict=True)
 
 
 def test_relation_type_mismatch_is_counted():
@@ -529,7 +542,7 @@ def test_relation_type_mismatch_is_counted():
     for row in rows:
         if row["mr_id"] == "adding_contradiction":
             row["mr_type"] = "inv"  # wrong on purpose
-    _, report = convert_to_alpaca(rows, mode="none")
+    _, report = convert_v3(rows, mode="none")
     assert report["relation_type_mismatch_count"] >= 1
 
 
@@ -543,8 +556,8 @@ def test_relation_aware_alias_equals_full_specification():
         operation_descriptions=MR_OPERATION_DESCRIPTIONS,
         relation_effects=MR_RELATION_DESCRIPTIONS,
     )
-    a, ra = convert_to_alpaca(rows, mode="relation_aware", **kwargs)
-    b, rb = convert_to_alpaca(rows, mode="full_specification", **kwargs)
+    a, ra = convert_v3(rows, mode="relation_aware", **kwargs)
+    b, rb = convert_v3(rows, mode="full_specification", **kwargs)
     assert [r["instruction"] for r in a] == [r["instruction"] for r in b]
     assert ra["canonical_mode"] == rb["canonical_mode"] == "full_specification"
 
@@ -557,8 +570,8 @@ def test_shuffled_operation_alias_equals_pair_shuffled_operation():
         operation_descriptions=MR_OPERATION_DESCRIPTIONS,
         shuffled_descriptions=ops,
     )
-    a, ra = convert_to_alpaca(rows, mode="shuffled_operation", **kwargs)
-    b, rb = convert_to_alpaca(rows, mode="pair_shuffled_operation", **kwargs)
+    a, ra = convert_v3(rows, mode="shuffled_operation", **kwargs)
+    b, rb = convert_v3(rows, mode="pair_shuffled_operation", **kwargs)
     assert [r["instruction"] for r in a] == [r["instruction"] for r in b]
     assert ra["canonical_mode"] == rb["canonical_mode"] == "pair_shuffled_operation"
 
@@ -585,8 +598,8 @@ def test_mismatched_pair_keeps_shape_but_changes_source():
     rows, groups, original_map = dataset()
     mismatched = converter.build_mismatched_pair_map(groups)
 
-    plain, _ = convert_to_alpaca(rows, mode="pair_only", original_map=original_map)
-    other, _ = convert_to_alpaca(
+    plain, _ = convert_v3(rows, mode="pair_only", original_map=original_map)
+    other, _ = convert_v3(
         rows, mode="mismatched_pair", original_map=original_map,
         mismatched_pair_map=mismatched,
     )
@@ -596,3 +609,107 @@ def test_mismatched_pair_keeps_shape_but_changes_source():
     assert any(
         a["instruction"] != b["instruction"] for a, b in zip(plain, other)
     ), "mismatched control must actually change the pair"
+
+
+# ============================================================
+# v3 frozen-output golden regression
+# ============================================================
+# Guards the rule "v3 frozen, v4 new behavior": any refactor that changes the
+# template_version=3 rendering -- wording, block order, aliases, shuffled
+# controls -- breaks this test.  The golden file is tracked in git, so a diff
+# shows exactly what moved.
+V3_GOLDEN_PATH = Path(__file__).resolve().parent / "fixtures" / "rq2_v3_instruction_golden.json"
+V3_GOLDEN_SHUFFLE_SEED = 1041
+V3_GOLDEN_MODES = (
+    list(CORE_MODES) + list(CONTROL_MODES) + list(DIAGNOSTIC_MODES)
+    + ["relation_aware", "shuffled_operation"]
+)
+
+
+def build_v3_golden_dataset():
+    """Deterministic 7-pair dataset covering every MR family and a composite."""
+    specs = [
+        ("synonym_replacement", 0, "inv"),          # atomic invariance
+        ("adding_contradiction", 2, "flip"),        # atomic E->C
+        ("uninformative", 1, "neutral"),            # atomic E->N
+        ("composite_flip", 2, "flip"),              # composite, no component_mrs
+        ("composite_inv", 0, "inv"),
+        ("voice_switch", 0, "inv"),
+        ("conditional_clause", 1, "neutral"),
+    ]
+    rows = []
+    index = {}
+    for i, (mr_id, label, mr_type) in enumerate(specs):
+        pair_id = 100 + i
+        rows.append({
+            "premise": f"Golden premise {i}.", "hypothesis": f"Golden source hypothesis {i}.",
+            "label": 0, "pair_id": pair_id, "mr_id": "none", "mr_type": "inv",
+        })
+        if "source_row" not in index:
+            index["source_row"] = len(rows) - 1
+        rows.append({
+            "premise": f"Golden premise {i}.", "hypothesis": f"Golden follow-up hypothesis {i}.",
+            "label": label, "pair_id": pair_id, "mr_id": mr_id, "mr_type": mr_type,
+        })
+        index[mr_id] = len(rows) - 1
+    return rows, index
+
+
+def build_v3_golden_payload():
+    rows, index = build_v3_golden_dataset()
+    groups = tagged(rows)
+    original_map, _ = build_original_map(groups)
+    mismatched = converter.build_mismatched_pair_map(groups)
+    ops = select_shuffled_operation_mr_ids(rows, V3_GOLDEN_SHUFFLE_SEED)
+    rels = select_shuffled_relation_types(rows, V3_GOLDEN_SHUFFLE_SEED)
+
+    rendered = {}
+    for mode in V3_GOLDEN_MODES:
+        converted, _ = convert_v3(
+            rows, mode=mode, original_map=original_map,
+            operation_descriptions=MR_OPERATION_DESCRIPTIONS,
+            relation_effects=MR_RELATION_DESCRIPTIONS,
+            shuffled_descriptions=ops, shuffled_relation_types=rels,
+            mismatched_pair_map=mismatched,
+            template_version=3,
+        )
+        rendered[mode] = converted
+
+    cases = {}
+    for case_name, row_index in sorted(index.items()):
+        cases[case_name] = {"mr_id": rows[row_index]["mr_id"], "modes": {}}
+        for mode in V3_GOLDEN_MODES:
+            row = rendered[mode][row_index]
+            cases[case_name]["modes"][mode] = {
+                "sha256": hashlib.sha256(row["instruction"].encode("utf-8")).hexdigest(),
+                "instruction": row["instruction"],
+                "output": row["output"],
+            }
+    return {
+        "schema_version": 1,
+        "instruction_template_version": 3,
+        "shuffle_seed": V3_GOLDEN_SHUFFLE_SEED,
+        "cases": cases,
+    }
+
+
+def test_v3_instruction_output_is_frozen():
+    """template_version=3 must stay byte-identical (v3 frozen, v4 new behavior)."""
+    assert V3_GOLDEN_PATH.exists(), f"missing golden file: {V3_GOLDEN_PATH}"
+    golden = json.loads(V3_GOLDEN_PATH.read_text(encoding="utf-8"))
+    current = build_v3_golden_payload()
+
+    assert golden["instruction_template_version"] == 3
+    assert set(golden["cases"]) == set(current["cases"])
+    for case_name, golden_case in golden["cases"].items():
+        case = current["cases"][case_name]
+        assert case["mr_id"] == golden_case["mr_id"], case_name
+        assert set(case["modes"]) == set(golden_case["modes"]), case_name
+        for mode, golden_mode in golden_case["modes"].items():
+            got = case["modes"][mode]
+            assert got["sha256"] == golden_mode["sha256"], (
+                f"v3 instruction changed for case={case_name} mode={mode}\n"
+                f"--- golden ---\n{golden_mode['instruction']}\n"
+                f"--- now ---\n{got['instruction']}"
+            )
+            assert got["output"] == golden_mode["output"], (case_name, mode)

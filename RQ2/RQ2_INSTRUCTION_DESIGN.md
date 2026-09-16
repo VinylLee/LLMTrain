@@ -9,7 +9,15 @@ This document specifies the experimental design implemented in
 `scripts/convert_nli_to_ft.py`, `RQ2/scripts/convert_snli_rq2.py` and
 `RQ2/run_rq2_snli.py`.
 
-Related: `RQ2/MR_RELATION_AUDIT.md` (per-MR relation evidence).
+> **Version note (2026-09-16).** This document describes the shared experimental
+> matrix and the **v3** wording (`instruction_template_version = 3`), which is now
+> **frozen**. v4 (`= 4`) is the current version for new formal runs and changes only
+> the Operation/Relation *content model* — see `RQ2_INSTRUCTION_DESIGN_V4.md`. The
+> matrix, block order, controls and `full_oracle` semantics below apply verbatim to
+> both.
+
+Related: `RQ2/MR_RELATION_AUDIT.md` (per-MR relation evidence, v3),
+`RQ2/RQ2_INSTRUCTION_DESIGN_V4.md` + `RQ2/MR_RELATION_AUDIT_V4.md` (v4).
 
 ---
 

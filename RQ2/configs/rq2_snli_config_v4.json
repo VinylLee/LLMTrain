@@ -1,0 +1,91 @@
+{
+  "_schema_version": 3,
+  "_description": "RQ2 controlled SNLI MR-information experiment, v4: ordered provenance-explicit Operation + constraint-form Relation",
+  "_design": {
+    "doc": "RQ2/RQ2_INSTRUCTION_DESIGN.md (§ v4) + RQ2/RQ2_INSTRUCTION_DESIGN_V4.md",
+    "relation_audit": "RQ2/MR_RELATION_AUDIT_V4.md",
+    "factors": {
+      "P": "pair / source-follow-up grounding",
+      "O": "operation (input-transformation specification)",
+      "R": "relation (output-relation specification)",
+      "L": "source-label anchoring (diagnostic only, never part of the core 2x2x2)"
+    },
+    "core_modes": [
+      "none",
+      "operation_only",
+      "relation_only",
+      "operation_relation",
+      "pair_only",
+      "pair_operation",
+      "pair_relation",
+      "full_specification"
+    ],
+    "control_modes": [
+      "pair_shuffled_operation",
+      "pair_shuffled_relation"
+    ],
+    "diagnostic_modes": [
+      "full_oracle"
+    ],
+    "_deprecated_aliases": {
+      "relation_aware": "full_specification",
+      "shuffled_operation": "pair_shuffled_operation"
+    },
+    "operation_model": "ordered transformation trace T1 -> ... -> Tk from component_mrs",
+    "relation_model": "constraint on the (source label -> follow-up label) mapping",
+    "_note": "P/O/R/L metadata is emitted by scripts/mr_instruction_design.py into conversion_report.json and experiment_meta.json; never re-derived from the mode name."
+  },
+  "instruction_template_version": 4,
+  "_converted_dir_note": "v4 output is versioned separately; the frozen v2/v3 conversions under RQ2/data/converted/ and RQ2/data/converted_v3/ are never overwritten.",
+  "converted_dir": "RQ2/data/converted_v4",
+  "model": {
+    "key": "gemma-3-4b-it",
+    "hub_id": "google/gemma-3-4b-it",
+    "local_path": "models/google/gemma-3-4b-it",
+    "template": "gemma",
+    "cuda": "0"
+  },
+  "data": {
+    "training_input": "data/nli/mettrain/snli_lr0.0037_gemma-3-4b-it-qat-v3_3/augmented_data_all_label_mrs_v3_3_full.json",
+    "merged_test_input": "data/nli/mr_test_data_merged/snli.jsonl",
+    "target_samples": 5340,
+    "val_ratio": 0.05,
+    "cutoff_len": 512
+  },
+  "modes": [
+    "none",
+    "operation_only",
+    "relation_only",
+    "operation_relation",
+    "pair_only",
+    "pair_operation",
+    "pair_relation",
+    "full_specification",
+    "pair_shuffled_operation",
+    "pair_shuffled_relation",
+    "full_oracle"
+  ],
+  "seeds": [
+    42,
+    43,
+    44
+  ],
+  "training": {
+    "learning_rate": 0.0003,
+    "epochs": 3.0,
+    "rank": 8,
+    "batch": 4,
+    "grad_accum": 8,
+    "save_steps": 9999,
+    "save_total_limit": 2,
+    "test_batch_size": 32,
+    "max_new_tokens": 10
+  },
+  "output_root": "RQ2/output/gemma3_4b_nli_grounded_v4",
+  "data_root": "RQ2/data",
+  "require_composite_provenance": true,
+  "_cohort_note": "v4 uses a DIFFERENT cohort file than v3, chosen because it is the only artifact that stores ordered component_mrs provenance for composite rows (data/nli/mettrain/snli_lr0.0037_gemma-3-4b-it-qat-v3_3/augmented_data_all_label_mrs_v3_3_full.json, 5340 rows, 2033 sources, 486 composites with 100% provenance coverage). The v3 cohort (snli_lr0.0037_gemma-3-4b-it-qat/augmented_data.json) has NO composite provenance, so v3 and v4 do NOT share metamorphic examples and their results are not directly comparable example-for-example. Source rows are identical across the two cohorts.",
+  "_output_root_note": "v4 writes to its own root; v3 artifacts under RQ2/output/gemma3_4b_nli_grounded_v3/ stay untouched.",
+  "_cohort_dir_note": "v4 samples into its own cohort directory so the frozen v3 cohort files under RQ2/data/cohorts/ are never overwritten.",
+  "cohorts_dir": "RQ2/data/cohorts_v4"
+}

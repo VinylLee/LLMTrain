@@ -184,9 +184,11 @@ def main():
         if not ok:
             return 1
 
+    cohorts_root = project_path(cfg["cohorts_dir"]) if cfg.get("cohorts_dir") else data_root / "cohorts"
+
     for exp in exps:
         name = exp["name"]
-        cohort_dir = data_root / "cohorts" / f"snli_seed{exp['seed']}"
+        cohort_dir = cohorts_root / f"snli_seed{exp['seed']}"
         sampled = cohort_dir / "sampled.json"
         sampling_report = cohort_dir / "sampling_report.json"
         manifest = cohort_dir / "split_manifest.json"
@@ -221,6 +223,8 @@ def main():
                 "--instruction-template-version",
                 cfg.get("instruction_template_version", INSTRUCTION_DESIGN_VERSION),
             ]
+            if cfg.get("require_composite_provenance"):
+                cmd.append("--require-composite-provenance")
             if first_mode:
                 cmd.append("--write-manifest")
             if not run_cmd(cmd, f"Convert {name}", args.dry_run, env):

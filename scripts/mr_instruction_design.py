@@ -463,14 +463,19 @@ def compose_instruction(
     original_label: str = "",
     operation_description: str = "",
     relation_description: str = "",
+    version: int = 3,
 ) -> str:
     """Render the instruction for ``mode`` from pre-resolved block payloads.
 
     Only block *presence* varies with the mode; wording, order and separators
-    are fixed by the registry.
+    are fixed by the registry.  ``version`` selects the block wording: 3 = the
+    frozen v3 design, 4 = ordered-provenance Operation + constraint Relation.
+    Block order is identical in both.
     """
-    spec = mode_spec(mode)
-    template = build_mode_template(spec)
+    if version >= INSTRUCTION_DESIGN_VERSION_V4:
+        template = INSTRUCTION_TEMPLATES_V4[resolve_mode_name(mode)]
+    else:
+        template = build_mode_template(mode_spec(mode))
     return template.format(
         nli_instruction=nli_instruction,
         original_premise=original_premise,
@@ -495,6 +500,7 @@ def block_derangement(
     buckets: Sequence[Optional[str]],
     keys: Sequence[str],
     seed: int,
+    strict_hall: bool = True,
 ) -> List[Optional[str]]:
     """Reassign ``buckets`` so no element keeps its own bucket.
 
@@ -528,11 +534,15 @@ def block_derangement(
     total = len(indexed)
     max_size = max(len(members) for members in grouped.values())
     if max_size * 2 > total:
-        # Hall's condition: the largest bucket needs more partners than exist.
-        raise ValueError(
-            "无法生成零 identity collision 的 derangement: "
-            f"最大 bucket={max_size} 超过总数的一半 (total={total})"
-        )
+        # Hall's condition: the largest bucket needs more partners than exist, so
+        # a complete derangement does not exist.  Strict callers must not silently
+        # accept a weaker control; best-effort callers get the rotation, which
+        # attains the minimum possible number of collisions (2*max - total).
+        if strict_hall:
+            raise ValueError(
+                "无法生成零 identity collision 的 derangement: "
+                f"最大 bucket={max_size} 超过总数的一半 (total={total})"
+            )
 
     # Seed determines the *block order*.  Any order that keeps each bucket's rows
     # contiguous is valid (see the docstring), so this is seed-sensitive without
@@ -574,3 +584,397 @@ def derangement_frequency_mismatch(
     return Counter(b for b in buckets if b is not None) != Counter(
         b for b in assigned if b is not None
     )
+
+
+# ============================================================================
+# v4: ordered provenance-explicit Operation + constraint-form Relation
+# ============================================================================
+# v4 keeps the SAME experimental matrix (MODE_SPECS, block order, P/O/R/L
+# semantics) as v3.  Only two things change:
+#
+#   Operation : a generic single-sentence provenance blurb becomes an *ordered*
+#               transformation trace T1 -> T2 -> ... -> Tk, expanded from the
+#               dataset's ``component_mrs`` sequence.
+#   Relation  : hedging prose becomes a *constraint* statement over the
+#               (source label -> follow-up label) mapping, restricted to the
+#               applicability branch the generator actually instantiates.
+#
+# Nothing in this section is read by the v3 code path, so v3 output stays
+# byte-identical.  See RQ2/RQ2_INSTRUCTION_DESIGN_V4.md and
+# RQ2/MR_RELATION_AUDIT_V4.md.
+
+INSTRUCTION_DESIGN_VERSION_V4 = 4
+
+#: v4 pair wording: "sample" reads like a few-shot exemplar; "source input"
+#: states the grounding role of the shown text explicitly.
+PAIR_BLOCK_V4 = (
+    "Paired source input:\n"
+    "<source_premise>\n"
+    "{original_premise}\n"
+    "</source_premise>\n"
+    "<source_hypothesis>\n"
+    "{original_hypothesis}\n"
+    "</source_hypothesis>"
+)
+
+OPERATION_BLOCK_V4 = "Input transformation:\n{operation_description}"
+RELATION_BLOCK_V4 = "Output relation:\n{relation_description}"
+
+#: LABEL_ANCHOR_BLOCK and NLI_TASK_BLOCK are reused verbatim from v3: v4 changes
+#: the MR-information representation, not the base NLI task.
+
+V4_OPERATION_TRACE_INTRO = (
+    "The follow-up input was derived from its source input through the following "
+    "ordered transformation sequence:"
+)
+
+#: Canonical factual step sentences, one per atomic transformation.  Declarative
+#: past tense: they state what happened to the input, never what the output must
+#: be.  Semantics follow the generator contract (MTrain OPERATION_SPECS), see
+#: RQ2/MR_RELATION_AUDIT_V4.md.
+V4_ATOMIC_OPERATION_STEPS: Dict[str, str] = {
+    "synonym_replacement":
+        "One or more words were replaced with context-appropriate synonyms.",
+    "pronoun_substitution":
+        "A noun phrase or pronoun was replaced with a coreferential expression.",
+    "voice_switch":
+        "A sentence was rewritten between active and passive voice.",
+    "conditional_clause":
+        "A conditional clause was added to one component of the input.",
+    "negation_flip":
+        "A negation marker was added, removed, or reversed.",
+    "antonym_substitution":
+        "One or more content words were replaced with context-appropriate antonyms.",
+    "uninformative":
+        "Additional content that is semantically irrelevant to the affected component was inserted.",
+    "adding_contradiction":
+        "Additional content that conflicts with a proposition in the affected component was inserted.",
+}
+
+#: Used only when a composite row carries no component provenance.  Formal RQ2
+#: v4 conversions must not contain this: the strict gate counts it and fails.
+V4_COMPOSITE_OPERATION_FALLBACK_STEP = (
+    "Multiple input-side transformations were applied in an unspecified order."
+)
+
+#: Provenance tag for an mr_id / component with no v4 step definition.  Treated
+#: as "missing" by the converter so it can never silently enter a formal run.
+OPERATION_PROVENANCE_UNSUPPORTED = "unsupported"
+
+# ============================================================
+# v4 relation kinds
+# ============================================================
+# The v3 `flip` text totalised the mapping to entailment<->contradiction with
+# neutral->neutral.  That 3-class map is a *metric* operationalisation
+# (scripts/metamorphic_metrics.py) used to build a total function; the MR formal
+# definition is the applicability-restricted branch the generator instantiates
+# (MTrain OPERATION_SPECS: target="contradiction", eligible only when the source
+# label is entailment; paper: R_E->C = {r | O_r(E)=C}).
+#
+# v4 therefore states the constraint on the branch that actually occurs and does
+# not invent the C->E / N->N branches.
+V4_RELATION_KINDS: Tuple[str, ...] = (
+    "invariance",
+    "entailment_to_contradiction",
+    "entailment_to_neutral",
+)
+
+V4_RELATION_KIND_DESCRIPTIONS: Dict[str, str] = {
+    "invariance": (
+        "For a valid source-follow-up pair, the output labels must satisfy the "
+        "following constraint:\n"
+        "the follow-up label must be the same as the source label."
+    ),
+    "entailment_to_contradiction": (
+        "For a valid source-follow-up pair to which this relation applies, the "
+        "output labels must satisfy the following constraint:\n"
+        "if the source label is entailment, the follow-up label must be contradiction."
+    ),
+    "entailment_to_neutral": (
+        "For a valid source-follow-up pair to which this relation applies, the "
+        "output labels must satisfy the following constraint:\n"
+        "if the source label is entailment, the follow-up label must be neutral."
+    ),
+}
+
+#: mr_id -> v4 relation kind.  Derived from the same source of truth as v3's
+#: MR_RELATION_SPECS; kept explicit so the mapping is auditable in one place.
+MR_V4_RELATION_KINDS: Dict[str, Optional[str]] = {
+    "synonym_replacement": "invariance",
+    "pronoun_substitution": "invariance",
+    "voice_switch": "invariance",
+    "composite_inv": "invariance",
+    "adding_contradiction": "entailment_to_contradiction",
+    "antonym_substitution": "entailment_to_contradiction",
+    "negation_flip": "entailment_to_contradiction",
+    "composite_flip": "entailment_to_contradiction",
+    "uninformative": "entailment_to_neutral",
+    "conditional_clause": "entailment_to_neutral",
+    "composite_neutral": "entailment_to_neutral",
+    "race_sensitive_transformation": None,
+    "same_type_named_entity_substitution": None,
+    "tense_shift": None,
+    "none": None,
+}
+
+#: v4 kinds whose constraint names the follow-up label conditionally.  Ungrounded
+#: R remains a shortcut risk for these (see the design doc); that is a property
+#: of the design, not a wording bug, and must not be "fixed" by hedging.
+V4_SHORTCUT_RELATION_KINDS = ("entailment_to_contradiction", "entailment_to_neutral")
+
+
+def relation_kind_v4(mr_id: str) -> Optional[str]:
+    return MR_V4_RELATION_KINDS.get(mr_id)
+
+
+def relation_kind_requires_entailment_source(kind: Optional[str]) -> bool:
+    return kind in ("entailment_to_contradiction", "entailment_to_neutral")
+
+
+def render_relation_v4(mr_id: str) -> str:
+    """Return the v4 ``Output relation`` payload for ``mr_id``."""
+    kind = relation_kind_v4(mr_id)
+    if kind is None:
+        return ""
+    return V4_RELATION_KIND_DESCRIPTIONS[kind]
+
+
+def _norm_mr_id(value) -> str:
+    if value is None:
+        return "none"
+    return str(value).strip().lower().replace("-", "_")
+
+
+def resolve_operation_trace_v4(
+    mr_id: str,
+    component_mrs: Optional[Sequence[str]] = None,
+) -> Tuple[Tuple[str, ...], str]:
+    """Return ``(trace_id, provenance)`` for one row.
+
+    ``trace_id`` is the **ordered** sequence of atomic transformations that
+    produced the follow-up input.  ``component_mrs`` is authoritative and is
+    used exactly as stored: never sorted, never deduplicated, never filtered --
+    the array order is the real execution order, and a repeated entry means the
+    transformation ran twice.
+
+    Composite rows with no usable provenance yield an empty trace plus the
+    ``composite_fallback`` tag so callers can count and (in strict mode) reject
+    them.
+    """
+    if not mr_id or mr_id == "none":
+        return (), OPERATION_PROVENANCE_NONE
+
+    if mr_id in COMPOSITE_MR_IDS:
+        components = [_norm_mr_id(c) for c in (component_mrs or [])]
+        if not components:
+            return (), OPERATION_PROVENANCE_FALLBACK
+        if all(c in V4_ATOMIC_OPERATION_STEPS for c in components):
+            return tuple(components), OPERATION_PROVENANCE_COMPONENTS
+        # Provenance is present but names a transformation we cannot describe.
+        # Never silently drop the unknown component: report it as unsupported.
+        return (), OPERATION_PROVENANCE_UNSUPPORTED
+
+    if mr_id not in V4_ATOMIC_OPERATION_STEPS:
+        return (), OPERATION_PROVENANCE_UNSUPPORTED
+    return (mr_id,), OPERATION_PROVENANCE_EXACT
+
+
+def render_operation_v4(trace_id: Sequence[str], provenance: str) -> str:
+    """Render the v4 ``Input transformation`` payload.
+
+    Atomic and composite rows share one format: a numbered ordered list.  An
+    atomic row is simply an arity-1 trace.
+    """
+    if provenance in (OPERATION_PROVENANCE_NONE, OPERATION_PROVENANCE_UNSUPPORTED):
+        return ""
+    if provenance == OPERATION_PROVENANCE_FALLBACK:
+        steps = [V4_COMPOSITE_OPERATION_FALLBACK_STEP]
+    else:
+        steps = [V4_ATOMIC_OPERATION_STEPS[c] for c in trace_id]
+    body = "\n".join(f"{i}. {step}" for i, step in enumerate(steps, 1))
+    return f"{V4_OPERATION_TRACE_INTRO}\n{body}"
+
+
+def operation_arity(trace_id: Sequence[str]) -> int:
+    return len(trace_id)
+
+
+# ============================================================
+# v4 block composition
+# ============================================================
+_V4_BLOCK_TEMPLATES = {
+    "pair": PAIR_BLOCK_V4,
+    "label_anchor": LABEL_ANCHOR_BLOCK,
+    "operation": OPERATION_BLOCK_V4,
+    "relation": RELATION_BLOCK_V4,
+}
+
+
+def build_mode_template_v4(spec: Dict[str, object], binary: bool = False) -> str:
+    """Same block order as v3, with the v4 block wording."""
+    parts = [_V4_BLOCK_TEMPLATES[name]
+             for name in active_block_names(spec) if name != "nli_task"]
+    parts.append(NLI_TASK_BLOCK_BINARY if binary else NLI_TASK_BLOCK)
+    return BLOCK_SEPARATOR.join(parts)
+
+
+INSTRUCTION_TEMPLATES_V4: Dict[str, str] = {
+    mode: build_mode_template_v4(spec) for mode, spec in MODE_SPECS.items()
+}
+
+
+# ============================================================
+# v4 matched derangement for the shuffled-operation control
+# ============================================================
+def select_matched_shuffled_operation_donors(rows_meta: Sequence[Dict[str, object]],
+                                             seed: int) -> List[Optional[int]]:
+    """Choose a donor row for every augmented row (matched derangement).
+
+    ``rows_meta[i]`` must provide ``trace_id`` (tuple), ``arity`` (int),
+    ``relation_kind`` (str or None) and ``key`` (stable string).  Source rows
+    must pass ``trace_id = None`` and get ``None`` back.
+
+    Matching preferences, in order:
+
+    1. same transformation arity (1-step <-> 1-step, 2-step <-> 2-step, ...);
+    2. same relation kind (invariance <-> invariance, E->C <-> E->C, ...);
+    3. the assigned trace must differ from the row's own trace;
+    4. rows are visited in a seed-dependent order so the control is not one
+       fixed permutation shared by every seed.
+
+    Returns a donor-index list aligned to ``rows_meta``.  When a stratum cannot
+    be deranged internally (Hall's condition fails), the residual fixed points
+    are repaired by swapping donors with another stratum; the number of such
+    rows is reported by the caller via
+    :func:`build_matched_control_audit`.
+    """
+    n = len(rows_meta)
+    donors: List[Optional[int]] = [None] * n
+    active = [i for i, meta in enumerate(rows_meta) if meta.get("trace_id") is not None]
+    if not active:
+        return donors
+
+    # ---- phase 1: derange within each arity stratum -------------------------
+    strata: Dict[int, List[int]] = {}
+    for i in active:
+        strata.setdefault(int(rows_meta[i]["arity"]), []).append(i)
+
+    for arity in sorted(strata):
+        members = strata[arity]
+        grouped: Dict[Tuple[str, ...], List[int]] = {}
+        for i in members:
+            grouped.setdefault(tuple(rows_meta[i]["trace_id"]), []).append(i)
+
+        # Block order is seed-dependent so different seeds give different
+        # assignments, while the cyclic shift below still guarantees a
+        # different trace (contiguous blocks + shift >= own block size).
+        block_order = sorted(
+            grouped,
+            key=lambda trace: _stable_permutation_key(seed, "\x1f".join(trace)),
+        )
+        ordered: List[int] = []
+        for trace in block_order:
+            ordered.extend(sorted(grouped[trace], key=lambda i: str(rows_meta[i]["key"])))
+
+        offset = max(len(v) for v in grouped.values())
+        total = len(ordered)
+        for position, i in enumerate(ordered):
+            donors[i] = ordered[(position + offset) % total]
+
+    # ---- phase 2: repair residual fixed points across strata ---------------
+    fixed = [i for i in active if rows_meta[donors[i]]["trace_id"] == rows_meta[i]["trace_id"]]
+    repair_order = sorted(
+        fixed,
+        key=lambda i: _stable_permutation_key(seed, str(rows_meta[i]["key"])),
+    )
+    for i in repair_order:
+        if rows_meta[donors[i]]["trace_id"] != rows_meta[i]["trace_id"]:
+            continue  # already repaired by an earlier swap
+        candidates = sorted(
+            (j for j in active
+             if j != i
+             and rows_meta[j]["arity"] != rows_meta[i]["arity"]
+             and rows_meta[donors[j]]["trace_id"] != rows_meta[i]["trace_id"]
+             and rows_meta[donors[i]]["trace_id"] != rows_meta[j]["trace_id"]),
+            key=lambda j: _stable_permutation_key(seed, str(rows_meta[j]["key"])),
+        )
+        if not candidates:
+            continue
+        j = candidates[0]
+        donors[i], donors[j] = donors[j], donors[i]
+
+    return donors
+
+
+def build_matched_control_audit(
+    rows_meta: Sequence[Dict[str, object]],
+    donors: Sequence[Optional[int]],
+    assigned_relation_kinds: Optional[Sequence[Optional[str]]] = None,
+    seed: int = 0,
+) -> Dict[str, object]:
+    """Quality report for the v4 shuffled-operation / shuffled-relation controls."""
+    total = 0
+    trace_collisions = 0
+    text_collisions = 0
+    same_arity = 0
+    same_kind = 0
+    cross_arity_fallback = 0
+    cross_kind_fallback = 0
+    no_candidate = 0
+
+    for i, meta in enumerate(rows_meta):
+        if meta.get("trace_id") is None:
+            continue
+        total += 1
+        donor = donors[i]
+        if donor is None:
+            no_candidate += 1
+            continue
+
+        own_trace = tuple(meta["trace_id"])
+        donor_trace = tuple(rows_meta[donor]["trace_id"])
+        if own_trace == donor_trace:
+            trace_collisions += 1
+        if meta.get("operation_text") is not None and \
+                meta["operation_text"] == rows_meta[donor].get("operation_text"):
+            text_collisions += 1
+
+        if int(rows_meta[donor]["arity"]) == int(meta["arity"]):
+            same_arity += 1
+        else:
+            cross_arity_fallback += 1
+
+        own_kind = meta.get("relation_kind")
+        donor_kind = rows_meta[donor].get("relation_kind")
+        if own_kind is not None and own_kind == donor_kind:
+            same_kind += 1
+        else:
+            cross_kind_fallback += 1
+
+    report = {
+        "seed": seed,
+        "total_augmented": total,
+        "operation_trace_identity_collision_count": trace_collisions,
+        "operation_text_unchanged_count": text_collisions,
+        "shuffled_operation_same_arity_count": same_arity,
+        "shuffled_operation_same_arity_rate": (same_arity / total) if total else 0.0,
+        "shuffled_operation_same_relation_kind_count": same_kind,
+        "shuffled_operation_same_relation_kind_rate": (same_kind / total) if total else 0.0,
+        "shuffled_operation_cross_arity_fallback_count": cross_arity_fallback,
+        "shuffled_operation_cross_relation_fallback_count": cross_kind_fallback,
+        "shuffled_operation_no_valid_candidate_count": no_candidate,
+    }
+
+    if assigned_relation_kinds is not None:
+        rel_total = 0
+        rel_collisions = 0
+        for i, meta in enumerate(rows_meta):
+            if meta.get("relation_kind") is None:
+                continue
+            rel_total += 1
+            if assigned_relation_kinds[i] == meta["relation_kind"]:
+                rel_collisions += 1
+        report["total_relation_eligible"] = rel_total
+        report["shuffled_relation_identity_collision_count"] = rel_collisions
+
+    return report

@@ -20,6 +20,11 @@ from convert_nli_to_ft import (  # noqa: E402
     INSTRUCTION_TEMPLATE_VERSION,
     LEGACY_INSTRUCTION_TEMPLATE_VERSIONS,
     build_grounding_control_audit,
+    build_matched_control_audit,
+    build_matched_control_rows_meta,
+    select_matched_shuffled_operation_donors_for,
+    select_shuffled_relation_kinds_v4,
+    uses_ordered_operation_trace,
     build_mismatched_pair_map,
     build_original_map,
     build_pair_groups,
@@ -87,6 +92,8 @@ def main():
     parser.add_argument("--seed", type=int, required=True)
     parser.add_argument("--instruction-template-version", type=int,
                         default=INSTRUCTION_DESIGN_VERSION)
+    parser.add_argument("--require-composite-provenance", action="store_true",
+                        help="v4 正式 run：任何 composite 行缺少 component_mrs 直接失败")
     parser.add_argument("--output-dir", required=True,
                         help="RQ2 data directory; one <name> subdirectory is created")
     parser.add_argument("--manifest", required=True)
@@ -134,8 +141,14 @@ def main():
         raise ValueError(f"训练组缺少唯一 source: {missing_sources[:3]}")
 
     template_version = args.instruction_template_version
-    legacy = template_version in LEGACY_INSTRUCTION_TEMPLATE_VERSIONS
+    # v2 is the only per-mode hand-written path; v3 and v4 both compose blocks.
+    legacy = template_version == 2
+    ordered_trace = uses_ordered_operation_trace(template_version)
     op_map, rel_map = descriptions_for_version(template_version)
+    if args.require_composite_provenance and not ordered_trace:
+        raise ValueError(
+            "--require-composite-provenance 只对 v4（ordered trace）有意义"
+        )
 
     mode = args.mode
     canonical_mode = resolve_mode_name(mode)
@@ -147,16 +160,57 @@ def main():
     shuffle_seed = args.seed + 999
     shuffled = None
     shuffled_relation_types = None
+    shuffled_operation_donors = None
     mismatched_pair_map = None
     shuffle_audit = None
     grounding_control_audit = None
+    matched_control_audit = None
 
     if legacy and spec["operation_source"] == "shuffled":
         all_mr_ids = {normalize_mr_id(s.get("mr_id")) for s in samples}
         shuffled = select_shuffled_descriptions(
             train_samples, all_mr_ids, shuffle_seed, descriptions=op_map
         )
-    elif not legacy:
+    elif ordered_trace:
+        if spec["operation_source"] == "shuffled":
+            shuffled_operation_donors, rows_meta = select_matched_shuffled_operation_donors_for(
+                train_samples, shuffle_seed
+            )
+        else:
+            rows_meta = build_matched_control_rows_meta(train_samples)
+        if spec["relation_source"] == "shuffled":
+            shuffled_relation_types = select_shuffled_relation_kinds_v4(train_samples, shuffle_seed)
+        if spec["pair_source"] == "mismatched":
+            mismatched_pair_map = build_mismatched_pair_map(train_groups)
+        if shuffled_operation_donors is not None or shuffled_relation_types is not None:
+            matched_control_audit = build_matched_control_audit(
+                rows_meta,
+                shuffled_operation_donors if shuffled_operation_donors is not None
+                else [None] * len(train_samples),
+                shuffled_relation_types,
+                shuffle_seed,
+            )
+            # Hard requirements: the shuffled Operation must never render the
+            # row's own trace or its own text.
+            for field in (
+                "operation_trace_identity_collision_count",
+                "operation_text_unchanged_count",
+            ):
+                if matched_control_audit.get(field):
+                    raise ValueError(
+                        f"v4 shuffled 控制不满足约束: {field}="
+                        f"{matched_control_audit[field]}"
+                    )
+            # The Relation control is capped by Hall's condition on this cohort
+            # (one relation kind dominates).  Reported, not fatal.
+            if matched_control_audit.get("shuffled_relation_identity_collision_count"):
+                print(
+                    "  ⚠️  shuffled_relation 存在无法 derange 的行: "
+                    f"{matched_control_audit['shuffled_relation_identity_collision_count']}"
+                    f"/{matched_control_audit.get('total_relation_eligible')} "
+                    "（kind marginals 保持匹配，见 conversion report）"
+                )
+    else:
         if spec["operation_source"] == "shuffled":
             shuffled = select_shuffled_operation_mr_ids(train_samples, shuffle_seed)
         if spec["relation_source"] == "shuffled":
@@ -188,7 +242,9 @@ def main():
         relation_effects=rel_map if spec["relation"] else None,
         shuffled_descriptions=shuffled,
         shuffled_relation_types=shuffled_relation_types,
+        shuffled_operation_donors=shuffled_operation_donors,
         mismatched_pair_map=mismatched_pair_map,
+        require_composite_provenance=args.require_composite_provenance,
         strict=True,
         template_version=template_version,
     )
@@ -270,6 +326,11 @@ def main():
         "grounding_control_audit": grounding_control_audit,
         "mismatched_pair_used": mismatched_pair_map is not None,
     }
+    if ordered_trace:
+        # v4-only audit fields.  Emitted conditionally so that regenerating a
+        # frozen v2/v3 conversion reproduces its report byte-for-byte.
+        report["matched_control_audit"] = matched_control_audit
+        report["require_composite_provenance"] = args.require_composite_provenance
     (out_dir / "conversion_report.json").write_text(
         json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
     )

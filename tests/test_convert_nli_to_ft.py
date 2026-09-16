@@ -165,10 +165,13 @@ def test_token_report_uses_real_tokenizer_path_and_reports_by_mr():
 
 
 def test_template_hashes_are_full_sha256():
-    # v3 is current; v2 is retained as a frozen legacy path.
-    assert INSTRUCTION_TEMPLATE_VERSION == 3
-    assert 2 in converter.LEGACY_INSTRUCTION_TEMPLATE_VERSIONS
+    # v4 is current; v2 and v3 are retained as frozen legacy paths.
+    assert INSTRUCTION_TEMPLATE_VERSION == 4
+    assert set(converter.LEGACY_INSTRUCTION_TEMPLATE_VERSIONS) == {2, 3}
     assert converter.LEGACY_INSTRUCTION_TEMPLATES_V2
+    assert converter.INSTRUCTION_TEMPLATES_V3
+    # each version hashes its own template set
+    assert len({converter.template_hash(v) for v in (2, 3, 4)}) == 3
     for value in (
         INSTRUCTION_TEMPLATE_HASH,
         OPERATION_DESCRIPTION_HASH,

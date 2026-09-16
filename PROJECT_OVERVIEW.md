@@ -154,14 +154,14 @@ python scripts/run_batch_experiments.py \
 负责：
 
 - 从逐行 JSON 读取 `premise`、`hypothesis`、`label`、`pair_id`、`mr_id` 等字段；
-- 支持多种 `--mr-instruction-mode`：`none`、`operation_only`、`pair_only`、`pair_operation`（主实验）、`shuffled_operation`（负对照）、`relation_aware`、`full_oracle`；
+- 支持 `--mr-instruction-mode`：核心 2×2×2 为 `none`、`operation_only`、`relation_only`、`operation_relation`、`pair_only`、`pair_operation`、`pair_relation`、`full_specification`；controls `pair_shuffled_operation`、`pair_shuffled_relation`、`mismatched_pair`；diagnostic `full_oracle`；`relation_aware`/`shuffled_operation` 为精确别名；
 - MR 操作描述与关系效果使用独立的字典结构，主实验不读取关系效果；
 - 验证集始终使用普通 NLI instruction（mode=none），避免标签泄漏；
 - **按 `pair_id` group 拆分** train/validation，同一 pair 的所有样本不会跨 split；
 - 支持 `--split-manifest` / `--write-split-manifest`：同一 cohort 的不同 instruction 变体复用相同的 train/validation 划分；
 - `--strict-pairing` 模式：未知 `mr_id`、增强样本缺 source、多 source group 等直接报错；
 - 输出 `conversion_report.json`，包含样本数、group 数、MR 分布、标签分布、fallback 统计，以及实际 tokenizer 的 train/validation 整体与 by-MR token 长度统计；
-- 当前 MR-as-Instruction template schema 为 v2；reference premise/hypothesis 使用显式 XML 风格边界，避免原文双引号造成歧义；
+- 当前 MR-as-Instruction template schema 为 **v4**（v2/v3 冻结保留，可用 `--instruction-template-version` 选择）；reference/source premise-hypothesis 使用显式 XML 风格边界，避免原文双引号造成歧义；v4 的 Operation 是 `component_mrs` 展开的有序 transformation trace，Relation 是 `must` 形式的适用性受限约束；
 - train/validation 在转换前按稳定 sample key 排序，同一 cohort/seed 的不同 mode 在相同 index 对应同一底层样本；
 - conversion report 记录 template/描述字典哈希、ordered sample signature 与转换后 train/validation JSONL SHA-256；shuffled mode 另记录 true→assigned confusion matrix；
 - 自动判断二分类的 `--binary` 参数保留但标记为已弃用（RTE 已从主实验移除）。
@@ -454,6 +454,7 @@ Gemma 是 gated 仓库；首次下载前需接受模型协议，并在当前环�
 - ✅ `scripts/run_batch_experiments.py` 更新：MR mode 传播、cohort-based manifest 共享、experiment meta 扩展；
 - ✅ RTE 已从实验配置和测试脚本中移除；
 - ✅ `tests/test_convert_nli_to_ft.py` 新增 23 个单元测试覆盖 split、instruction、strict 模式。
+- ✅ **RQ2 v4 instruction 设计（ordered provenance Operation + constraint Relation，2026-09-16）**：Operation 改为由 `component_mrs` 展开的有序 transformation trace，Relation 改为适用性受限的 `must` 约束（`invariance` / `entailment_to_contradiction` / `entailment_to_neutral`）；新增 `--require-composite-provenance` 正式门槛、matched shuffled-operation derangement（arity 匹配 99.4%、trace/text 冲突 0）、`scripts/audit_rq2_v4_provenance.py`。v3 与 v2 均冻结且重新生成逐字节一致。详见 `RQ2/RQ2_INSTRUCTION_DESIGN_V4.md`、`RQ2/MR_RELATION_AUDIT_V4.md`。
 - ✅ **RQ2 MR-information 设计重构（grounding-aware 2×2×2，2026-09-15）**：新增 `scripts/mr_instruction_design.py` 作为唯一真源（`PAIR/OPERATION/RELATION/LABEL_ANCHOR` 固定 block、`MODE_SPECS` 模式注册表、operation/relation specification、确定性 derangement、instruction 组合器）；`scripts/convert_nli_to_ft.py` 的 instruction 版本升到 v3，模板由注册表派生，v2 旧模板冻结保留供历史 config 复现；新增 `relation_only` / `operation_relation` / `pair_relation` / `full_specification` / `pair_shuffled_operation` / `pair_shuffled_relation` / `mismatched_pair`；`relation_aware` / `shuffled_operation` 成为精确别名；conversion report 与 experiment meta 记录显式 P/O/R/L 设计信息与完整性计数。设计与关系审计见 `RQ2/RQ2_INSTRUCTION_DESIGN.md`、`RQ2/MR_RELATION_AUDIT.md`；快照工具 `scripts/inspect_rq2_instructions.py`；测试 `tests/test_rq2_instruction_design.py`。
 
 ## 10. 后续工作建议

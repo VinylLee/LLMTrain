@@ -45,7 +45,21 @@ from collections import Counter, defaultdict
 from mr_instruction_design import (
     ALL_MODE_NAMES,
     CANONICAL_MODES,
+    INSTRUCTION_DESIGN_VERSION_V4,
     INSTRUCTION_TEMPLATES as V3_INSTRUCTION_TEMPLATES,
+    INSTRUCTION_TEMPLATES_V4 as V4_INSTRUCTION_TEMPLATES,
+    MR_V4_RELATION_KINDS,
+    V4_ATOMIC_OPERATION_STEPS,
+    V4_RELATION_KIND_DESCRIPTIONS,
+    V4_RELATION_KINDS,
+    V4_SHORTCUT_RELATION_KINDS,
+    build_matched_control_audit,
+    operation_arity,
+    relation_kind_v4,
+    render_operation_v4,
+    render_relation_v4,
+    resolve_operation_trace_v4,
+    select_matched_shuffled_operation_donors,
     CONTROL_MODES,
     CORE_MODES,
     DIAGNOSTIC_MODES,
@@ -60,6 +74,7 @@ from mr_instruction_design import (
     OPERATION_PROVENANCE_EXACT,
     OPERATION_PROVENANCE_FALLBACK,
     OPERATION_PROVENANCE_NONE,
+    OPERATION_PROVENANCE_UNSUPPORTED,
     RELATION_TYPES,
     RELATION_TYPE_DESCRIPTIONS,
     block_derangement,
@@ -138,11 +153,18 @@ INSTRUCTION_NLI_BINARY = (
     "Answer with exactly one label: entailment or not_entailment."
 )
 
-INSTRUCTION_TEMPLATE_VERSION = 3
-LEGACY_INSTRUCTION_TEMPLATE_VERSIONS = (2,)
+#: Current design version.  v4 changes only the MR-information representation
+#: (ordered Operation trace + constraint Relation); the experimental matrix,
+#: block order and every other invariant are shared with v3.
+INSTRUCTION_TEMPLATE_VERSION = INSTRUCTION_DESIGN_VERSION_V4
+#: Frozen versions.  v3 is retained byte-for-byte so already-converted v3 data
+#: and v3-trained adapters stay reproducible; v2 likewise.
+LEGACY_INSTRUCTION_TEMPLATE_VERSIONS = (2, 3)
+INSTRUCTION_TEMPLATE_VERSIONS_WITH_ORDERED_TRACE = (INSTRUCTION_DESIGN_VERSION_V4,)
 
-# v3 templates are *derived* from the mode registry, never hand-written.
-INSTRUCTION_TEMPLATES = dict(V3_INSTRUCTION_TEMPLATES)
+# Templates are *derived* from the mode registry, never hand-written.
+INSTRUCTION_TEMPLATES_V3 = dict(V3_INSTRUCTION_TEMPLATES)
+INSTRUCTION_TEMPLATES = dict(V4_INSTRUCTION_TEMPLATES)
 
 # ------------------------------------------------------------------
 # Frozen v2 legacy definitions (do not modify -- historical reproduction)
@@ -362,23 +384,56 @@ def canonical_sha256(value):
     return hashlib.sha256(payload).hexdigest()
 
 
-INSTRUCTION_TEMPLATE_HASH = canonical_sha256({
-    "version": INSTRUCTION_TEMPLATE_VERSION,
-    "templates": INSTRUCTION_TEMPLATES,
-})
+def template_hash(version):
+    """Hash the template set *of that version*.
+
+    Version-aware on purpose: a v3 conversion report must keep recording the v3
+    template hash, otherwise regenerating frozen v3 data would silently change
+    its report and break byte-level reproduction.
+    """
+    if version >= INSTRUCTION_DESIGN_VERSION_V4:
+        templates = INSTRUCTION_TEMPLATES
+    elif version == 3:
+        templates = INSTRUCTION_TEMPLATES_V3
+    elif version == 2:
+        templates = LEGACY_INSTRUCTION_TEMPLATES_V2
+    else:
+        raise ValueError(f"不支持的 instruction template version: {version}")
+    return canonical_sha256({"version": version, "templates": templates})
+
+
+INSTRUCTION_TEMPLATE_HASH = template_hash(INSTRUCTION_TEMPLATE_VERSION)
+INSTRUCTION_TEMPLATE_HASH_V3 = template_hash(3)
 OPERATION_DESCRIPTION_HASH = canonical_sha256(MR_OPERATION_DESCRIPTIONS)
 RELATION_EFFECT_HASH = canonical_sha256(MR_RELATION_DESCRIPTIONS)
 LEGACY_OPERATION_DESCRIPTION_HASH_V2 = canonical_sha256(LEGACY_MR_OPERATION_DESCRIPTIONS_V2)
 LEGACY_RELATION_EFFECT_HASH_V2 = canonical_sha256(LEGACY_MR_RELATION_EFFECTS_V2)
+#: v4 design hashes: the atomic step table and the relation-kind table.
+V4_OPERATION_STEP_HASH = canonical_sha256(V4_ATOMIC_OPERATION_STEPS)
+V4_RELATION_KIND_HASH = canonical_sha256(V4_RELATION_KIND_DESCRIPTIONS)
 
 
 def descriptions_for_version(template_version):
-    """Return ``(operation_descriptions, relation_descriptions)`` for a version."""
-    if template_version == INSTRUCTION_TEMPLATE_VERSION:
+    """Return ``(operation_descriptions, relation_descriptions)`` for a version.
+
+    Only meaningful for the v2/v3 paths, which resolve a payload from a static
+    ``mr_id -> text`` table.  A v4 row's Operation payload depends on that row's
+    ``component_mrs`` sequence, so v4 resolution happens per row in
+    :func:`convert_to_alpaca`; for v4 this returns the atomic step table and the
+    ``mr_id -> relation kind`` table so callers can still hash a stable
+    description of the design.
+    """
+    if template_version in INSTRUCTION_TEMPLATE_VERSIONS_WITH_ORDERED_TRACE:
+        return V4_ATOMIC_OPERATION_STEPS, MR_V4_RELATION_KINDS
+    if template_version == 3:
         return MR_OPERATION_DESCRIPTIONS, MR_RELATION_DESCRIPTIONS
-    if template_version in LEGACY_INSTRUCTION_TEMPLATE_VERSIONS:
+    if template_version == 2:
         return LEGACY_MR_OPERATION_DESCRIPTIONS_V2, LEGACY_MR_RELATION_EFFECTS_V2
     raise ValueError(f"不支持的 instruction template version: {template_version}")
+
+
+def uses_ordered_operation_trace(template_version):
+    return template_version in INSTRUCTION_TEMPLATE_VERSIONS_WITH_ORDERED_TRACE
 
 
 # ============================================================
@@ -590,18 +645,22 @@ def build_instruction_for_sample(
     if is_original:
         mode = "none"
 
-    if template_version in LEGACY_INSTRUCTION_TEMPLATE_VERSIONS:
+    if relation_description is None:
+        relation_description = relation_effect
+
+    if template_version == 2:
+        # Frozen legacy path: per-mode hand-written templates + v2 text tables.
         instruction = _build_instruction_v2(
             mode=mode,
             original_sample=original_sample,
             operation_description=operation_description,
-            relation_effect=relation_description if relation_description is not None else relation_effect,
+            relation_effect=relation_description,
             original_label=original_label,
             nli_instruction=nli_instruction,
         )
     else:
-        if relation_description is None:
-            relation_description = relation_effect
+        # v3 (grounding-aware blocks) and v4 (ordered trace + constraint
+        # relation) share one composer; only the block wording differs.
         instruction = compose_instruction(
             mode=mode,
             nli_instruction=nli_instruction,
@@ -610,6 +669,7 @@ def build_instruction_for_sample(
             original_label=original_label,
             operation_description=operation_description,
             relation_description=relation_description,
+            version=template_version,
         )
 
     return {
@@ -834,6 +894,53 @@ def build_grounding_control_audit(
     }
 
 
+def build_matched_control_rows_meta(samples, operation_descriptions=None):
+    """Per-row meta used by the v4 matched shuffled-operation derangement.
+
+    ``trace_id`` is ``None`` for source rows so they are excluded from the
+    derangement.  ``operation_text`` carries the *rendered* Operation payload so
+    the audit can assert that the shuffled control never reuses the row's own
+    text (not merely its own trace id).
+    """
+    meta = []
+    for sample in samples:
+        mr_id = normalize_mr_id(sample.get("mr_id"))
+        if mr_id == "none":
+            meta.append({
+                "trace_id": None, "arity": 0, "relation_kind": None,
+                "key": compute_sample_key(sample), "operation_text": None,
+            })
+            continue
+        trace, provenance = resolve_operation_trace_v4(mr_id, sample.get("component_mrs"))
+        meta.append({
+            "trace_id": trace,
+            "arity": len(trace),
+            "relation_kind": relation_kind_v4(mr_id),
+            "key": compute_sample_key(sample),
+            "operation_text": render_operation_v4(trace, provenance),
+        })
+    return meta
+
+
+def select_matched_shuffled_operation_donors_for(samples, seed):
+    """Donor indices for the v4 matched shuffled-operation control."""
+    meta = build_matched_control_rows_meta(samples)
+    return select_matched_shuffled_operation_donors(meta, seed), meta
+
+
+def select_shuffled_relation_kinds_v4(samples, seed):
+    """Reassign the v4 relation kind, keeping the kind marginals matched.
+
+    Best effort by design: with only three relation kinds, a cohort where one
+    kind dominates cannot be fully deranged (Hall's condition fails), and the
+    residual rows keep their own kind.  ``build_matched_control_audit`` reports
+    the resulting ``shuffled_relation_identity_collision_count`` instead of
+    hiding it, and the rotation used here attains the minimum possible count.
+    """
+    buckets, keys = _augmented_buckets(samples, relation_kind_v4)
+    return block_derangement(buckets, keys, seed, strict_hall=False)
+
+
 def build_mismatched_pair_map(groups):
     """Map each train group onto the source of a *different* group.
 
@@ -862,6 +969,8 @@ def convert_to_alpaca(
     shuffled_descriptions=None,
     shuffled_relation_types=None,
     mismatched_pair_map=None,
+    shuffled_operation_donors=None,
+    require_composite_provenance=False,
     strict=False,
     nli_instruction=None,
     template_version=INSTRUCTION_TEMPLATE_VERSION,
@@ -873,10 +982,15 @@ def convert_to_alpaca(
         mode: MR instruction mode
         is_binary: 是否二分类
         original_map: group_key -> original_sample 的映射
-        operation_descriptions: mr_id -> 操作描述文本 的映射
-        relation_effects: mr_id -> 关系效果描述 的映射
+        operation_descriptions: mr_id -> 操作描述文本 的映射（v2/v3）
+        relation_effects: mr_id -> 关系效果描述 的映射（v2/v3）
         shuffled_descriptions: 可选，shuffled mr_id 列表（与 samples 等长）
+        shuffled_operation_donors: v4 专用，matched shuffled-operation 的 donor 索引
+        require_composite_provenance: v4 正式 run 的硬门槛：任何 composite 行缺少
+            component_mrs 都直接报错，而不是静默回退到 generic description。
         strict: 若 True，对数据完整性问题报错
+        template_version: 2 = frozen legacy, 3 = frozen grounding-aware blocks,
+            4 = ordered provenance Operation + constraint Relation
 
     Returns:
         (converted list, report dict)
@@ -895,7 +1009,8 @@ def convert_to_alpaca(
     operation_source = spec["operation_source"]
     relation_source = spec["relation_source"]
     pair_source = spec["pair_source"]
-    legacy = template_version in LEGACY_INSTRUCTION_TEMPLATE_VERSIONS
+    ordered_trace = uses_ordered_operation_trace(template_version)
+    legacy = template_version == 2
 
     converted = []
     label_dist = Counter()
@@ -903,6 +1018,10 @@ def convert_to_alpaca(
     mr_label_dist = Counter()
     operation_provenance_dist = Counter()
     relation_type_dist = Counter()
+    operation_trace_dist = Counter()
+    operation_arity_dist = Counter()
+    v4_relation_kind_dist = Counter()
+    relation_shortcut_risk_count = 0
     pair_fallback_count = 0
     missing_operation = 0
     missing_relation = 0
@@ -932,38 +1051,88 @@ def convert_to_alpaca(
         # ---- operation specification --------------------------------------
         # ``effective_mr_id`` drives the operation block; it is the correct MR
         # id except in the shuffled control, where it is the assigned one.
+        component_mrs = s.get("component_mrs")
+        true_trace, true_provenance = resolve_operation_trace_v4(mr_id, component_mrs) \
+            if ordered_trace else ((), OPERATION_PROVENANCE_NONE)
+
         effective_mr_id = mr_id
         if not legacy and operation_source == "shuffled" and shuffled_descriptions is not None:
             effective_mr_id = shuffled_descriptions[i] or mr_id
             if not is_source_row and effective_mr_id == mr_id:
                 shuffled_operation_identity_collisions += 1
 
+        row_trace = true_trace
         operation_desc = ""
         operation_provenance = OPERATION_PROVENANCE_NONE
+
         if needs_operation and not is_source_row:
-            if legacy:
+            if ordered_trace:
+                if operation_source == "shuffled" and shuffled_operation_donors is not None:
+                    donor = shuffled_operation_donors[i]
+                    if donor is not None:
+                        row_trace, operation_provenance = resolve_operation_trace_v4(
+                            normalize_mr_id(samples[donor].get("mr_id")),
+                            samples[donor].get("component_mrs"),
+                        )
+                        if row_trace == true_trace and true_trace:
+                            shuffled_operation_identity_collisions += 1
+                else:
+                    operation_provenance = true_provenance
+                operation_desc = render_operation_v4(row_trace, operation_provenance)
+            elif legacy:
                 operation_desc = operation_descriptions.get(effective_mr_id, "")
                 operation_provenance = (
                     OPERATION_PROVENANCE_EXACT if operation_desc else OPERATION_PROVENANCE_NONE
                 )
             else:
-                component_mrs = s.get("component_mrs")
                 operation_desc, operation_provenance = resolve_operation_description(
                     effective_mr_id, component_mrs
                 )
+
             if operation_provenance == OPERATION_PROVENANCE_FALLBACK:
                 composite_operation_fallback_count += 1
+                if require_composite_provenance:
+                    raise ValueError(
+                        "composite 行缺少 component_mrs provenance: "
+                        f"mr_id={effective_mr_id}, pair_id={s.get('pair_id')}。"
+                        " 正式 v4 run 不接受 generic composite fallback；"
+                        " 请改用带 component_mrs 的 cohort，或关闭 "
+                        "--require-composite-provenance 做非正式 inspection。"
+                    )
             if not operation_desc:
                 missing_operation += 1
                 if strict:
-                    raise ValueError(f"缺少操作描述: mr_id={effective_mr_id}")
+                    raise ValueError(
+                        f"缺少操作描述: mr_id={effective_mr_id} "
+                        f"(provenance={operation_provenance})"
+                    )
         operation_provenance_dist[operation_provenance] += 1
+        if row_trace:
+            operation_trace_dist[row_trace] += 1
+            operation_arity_dist[len(row_trace)] += 1
 
         # ---- relation specification ---------------------------------------
         relation_desc = ""
         assigned_relation_type = None
+        row_relation_kind = relation_kind_v4(mr_id) if ordered_trace else None
+        if ordered_trace and row_relation_kind is not None:
+            v4_relation_kind_dist[row_relation_kind] += 1
+            if row_relation_kind in V4_SHORTCUT_RELATION_KINDS:
+                relation_shortcut_risk_count += 1
         if needs_relation and not is_source_row:
-            if legacy:
+            if ordered_trace:
+                if relation_source == "shuffled" and shuffled_relation_types is not None:
+                    assigned_relation_type = shuffled_relation_types[i]
+                    if assigned_relation_type is not None:
+                        if assigned_relation_type == row_relation_kind:
+                            shuffled_relation_identity_collisions += 1
+                        relation_desc = V4_RELATION_KIND_DESCRIPTIONS.get(
+                            assigned_relation_type, "")
+                    else:
+                        relation_desc = render_relation_v4(mr_id)
+                else:
+                    relation_desc = render_relation_v4(mr_id)
+            elif legacy:
                 relation_desc = relation_effects.get(effective_mr_id, "")
             else:
                 if relation_source == "shuffled" and shuffled_relation_types is not None:
@@ -1086,6 +1255,24 @@ def convert_to_alpaca(
         "operation_provenance_distribution": dict(sorted(operation_provenance_dist.items())),
         "relation_type_distribution": dict(sorted(relation_type_dist.items())),
     }
+
+    if ordered_trace:
+        # v4-only audit fields.  Emitted conditionally so that regenerating a
+        # frozen v2/v3 conversion reproduces its report byte-for-byte.
+        report.update({
+            "operation_trace_id_distribution": {
+                " -> ".join(trace): count
+                for trace, count in sorted(operation_trace_dist.items())
+            },
+            "operation_trace_count": sum(operation_trace_dist.values()),
+            "unique_operation_trace_count": len(operation_trace_dist),
+            "operation_arity_distribution": dict(sorted(operation_arity_dist.items())),
+            "operation_unsupported_provenance_count": operation_provenance_dist.get(
+                OPERATION_PROVENANCE_UNSUPPORTED, 0
+            ),
+            "relation_kind_distribution_v4": dict(sorted(v4_relation_kind_dist.items())),
+            "relation_shortcut_risk_count": relation_shortcut_risk_count,
+        })
 
     return converted, report
 
