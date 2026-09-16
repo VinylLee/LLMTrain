@@ -86,6 +86,7 @@ output/<model>/<dataset>/<mr>.jsonl
 | `ft_config*.yaml` | 单次 LLaMA Factory LoRA 配置样例 | 手动/兼容入口 |
 | `output/experiments/gemma3_4b_nli/result.md` | Gemma 逐种子结果与三种子统计 | Gemma 当前结果汇总 |
 | `scripts/summarize_seed_experiments.py` | 从逐行 `correct` 重算结果并可生成 Gemma/Llama 对比 | 可复现汇总入口 |
+| `RQ2/RQ2_V4_DESIGN_SUMMARY.md` | **RQ2 当前状态唯一入口说明**（数据集、模板、P/O/R/L、MR description、风险） | 改 MR-instruction 前必读 |
 | `CLAUDE.md` | 既有项目说明 | 主要覆盖 API 流程 |
 | `LM_STUDIO_GUIDE.md` | 本地 LM Studio 使用说明 | 本地 API 辅助文档 |
 | `.env` | API 端点与密钥 | 敏感，禁止读取/提交 |

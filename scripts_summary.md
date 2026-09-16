@@ -77,6 +77,12 @@
 
 ## 3. `convert_nli_to_ft.py`
 
+> **注意（2026-09-16）**：本节的 mode / 模板描述已过时。该脚本现在支持
+> `instruction_template_version` 2 / 3 / **4**（当前为 4），以及 12 个
+> MR-instruction mode（8 核心 grounding-aware 2×2×2 + 3 controls + 1 diagnostic）。
+> 权威说明见 **`RQ2/RQ2_V4_DESIGN_SUMMARY.md`**，设计与关系证据见
+> `RQ2/RQ2_INSTRUCTION_DESIGN*.md`、`RQ2/MR_RELATION_AUDIT*.md`。
+
 ### 代码逻辑
 - 读取一个或多个 NLI JSONL 文件。
 - 自动识别二分类 RTE，或通过 `--binary` 强制指定。
@@ -89,7 +95,7 @@
 - 输出：`full.json` 或 `full_train.json`、`full_val.json`，以及 `dataset_info.json` 的新条目。
 
 ### 调用关系
-- 被 `run_batch_experiments.py` 和 `run_experiment.py` 调用。
+- 被 `run_batch_experiments.py`、`run_experiment.py` 和 `RQ2/scripts/convert_snli_rq2.py` 调用。
 
 ### 潜在问题
 - 生成的 `.json` 文件内容实际是 JSONL，而不是 JSON 数组。
@@ -401,7 +407,7 @@
 - 输出：`output/experiments/<exp>/tests/original/*.jsonl` 和 `tests/mr/*.jsonl`。
 
 ### 调用关系
-- 被 `run_batch_experiments.py` 和 `run_experiment.py` 调用。
+- 被 `run_batch_experiments.py`、`run_experiment.py` 和 `RQ2/scripts/convert_snli_rq2.py` 调用。
 
 ### 潜在问题
 - MR 测试把所有 MR 类型聚合在一起，缺少单 MR 追溯信息。

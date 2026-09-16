@@ -41,7 +41,7 @@ python RQ1/run_rq1_nli.py --model gemma-3-4b-it --dry-run
 | `--experiment` | choice[] | `original mr` | 实验类型：`original` / `mr` / `zaug` / `disco` / `generic_llm_aug` / 其他已注册类型 |
 | `--train-data` | str[] | snli,mnlim,sick | 训练数据集 |
 | `--seeds` | int[] | `[42]` | 随机种子列表 |
-| `--mr-instruction-mode` | choice | `pair_operation` | MR instruction 模式（仅 MR 实验生效） |
+| `--mr-instruction-mode` | choice | `pair_operation` | MR instruction 模式（仅 MR 实验生效）。完整 mode 列表、语义与当前版本见 `RQ2/RQ2_V4_DESIGN_SUMMARY.md` |
 | `--target` | int | 配置中的默认值 | 覆盖训练样本目标数 |
 | `--lr` | float | 3e-4 | 覆盖 learning rate |
 | `--epochs` | float | 3.0 | 覆盖 epochs |
@@ -107,11 +107,20 @@ sample → convert → finetune → test_original → test_mr
 
 `back_translation` 是 SNLI 专用的预先构建训练条件，读取
 `data/nli/back_translation/snli_mettrain_gemma_v2_multipivot_5340_combined_seed{seed}.jsonl`，其中包含原始样本和 Gemma 回译增强样本。它不经过 pair-id 抽样，sample 阶段只复制对应 seed 文件；微调使用普通 NLI instruction（`none`）。
-| `operation_only` | 仅操作描述 | RQ2 ablation |
-| `pair_only` | 仅 reference sample | RQ2 ablation |
-| `shuffled_operation` | 随机打乱的操作描述 | RQ2 负对照 |
-| `relation_aware` | 操作 + 关系效果 | RQ2 ablation |
-| `full_oracle` | reference + 标签 + 操作 + 关系 | RQ2 上界 |
+| `operation_only` | 仅 operation | RQ2 core（P0 O1 R0 L0） |
+| `relation_only` | 仅 relation | RQ2 core（P0 O0 R1 L0） |
+| `operation_relation` | operation + relation | RQ2 core（P0 O1 R1 L0） |
+| `pair_only` | 仅 paired source input | RQ2 core（P1 O0 R0 L0） |
+| `pair_relation` | paired source input + relation | RQ2 core（P1 O0 R1 L0） |
+| `full_specification` | paired source input + operation + relation | RQ2 core（P1 O1 R1 L0） |
+| `pair_shuffled_operation` | 打乱后的 operation（matched derangement） | RQ2 对照 |
+| `pair_shuffled_relation` | 打乱后的 relation | RQ2 对照 |
+| `mismatched_pair` | 配对到其他 group 的 source | RQ2 对照 |
+| `full_oracle` | paired source input + **source label** + operation + relation | RQ2 diagnostic（L=1，不属于核心 2×2×2） |
+
+> `relation_aware` → `full_specification`、`shuffled_operation` → `pair_shuffled_operation`
+> 是**精确别名**（输出逐字节一致）。完整 mode 矩阵、P/O/R/L 语义与 MR description
+> 见 `RQ2/RQ2_V4_DESIGN_SUMMARY.md`。
 
 ## 输出结构
 

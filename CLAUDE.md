@@ -207,4 +207,11 @@ pip install -r requirements.txt    # requests, python-dotenv
 
 ## Research Plans
 
-- `.research/MR_AS_INSTRUCTION_PLAN.md` — Full experimental design for MR-as-Instruction, including variable definitions, instruction templates, evaluation protocols, and staged execution plan. Read this before implementing any MR-instruction features or modifying the convert/train pipeline for experiments.
+- **`RQ2/RQ2_V4_DESIGN_SUMMARY.md`** — **Read this first for any MR-instruction work.**
+  Current RQ2 state: which dataset, how the instruction template is assembled from
+  fixed blocks, the Pair/Operation/Relation/Label design, every MR's description, and
+  the known leakage / control caveats. Companion docs: `RQ2/RQ2_INSTRUCTION_DESIGN_V4.md`,
+  `RQ2/MR_RELATION_AUDIT_V4.md`, `RQ2/RQ2_INSTRUCTION_DESIGN.md` (shared matrix + frozen
+  v3 wording), `RQ2/MR_RELATION_AUDIT.md`.
+- `.research/old/MR_AS_INSTRUCTION_PLAN.md` — historical MR-as-Instruction plan (the
+  original Stage 1–4 design). Superseded by the RQ2 docs above; kept for provenance.

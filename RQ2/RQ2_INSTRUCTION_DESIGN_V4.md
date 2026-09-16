@@ -1,6 +1,10 @@
 # RQ2 v4 — ordered provenance-explicit Operation + constraint-form Relation
 
 `instruction_template_version = 4`. Supersedes v3 for new formal runs.
+
+**Entry point: [`RQ2_V4_DESIGN_SUMMARY.md`](RQ2_V4_DESIGN_SUMMARY.md)** — read that
+first for the dataset, the full template assembly, the P/O/R/L design and the
+per-MR description tables. This document covers only what v4 *changes*.
 Companion docs: `RQ2_INSTRUCTION_DESIGN.md` (shared matrix, v3 wording),
 `MR_RELATION_AUDIT_V4.md` (relation evidence).
 
