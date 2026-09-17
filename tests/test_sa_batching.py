@@ -184,6 +184,51 @@ def test_batched_generator_forwards_the_sampling_knobs_to_the_inner_model():
 
 
 # --------------------------------------------------------------------------- #
+# TorchDynamo recompilation ceiling
+# --------------------------------------------------------------------------- #
+
+def _torch_with_limit(limit):
+    """A stand-in for ``torch`` mirroring its real ``_dynamo.config`` object chain.
+
+    Returns the config object the helper will actually mutate, so assertions read
+    the same attribute the production code writes.
+    """
+    config = type("Config", (), {"cache_size_limit": limit})()
+    dynamo = type("Dynamo", (), {"config": config})()
+    torch_module = type("Torch", (), {"_dynamo": dynamo})()
+    return torch_module, config
+
+
+def test_relax_dynamo_cache_limit_raises_a_low_ceiling():
+    torch_module, config = _torch_with_limit(8)
+    assert engine.relax_dynamo_cache_limit(torch_module) == engine.DYNAMO_CACHE_SIZE_LIMIT
+    assert config.cache_size_limit == engine.DYNAMO_CACHE_SIZE_LIMIT
+
+
+def test_relax_dynamo_cache_limit_never_lowers_an_existing_high_ceiling():
+    torch_module, config = _torch_with_limit(4096)
+    engine.relax_dynamo_cache_limit(torch_module)
+    assert config.cache_size_limit == 4096
+
+
+def test_relax_dynamo_cache_limit_tolerates_missing_dynamo():
+    class Bare:
+        pass
+
+    assert engine.relax_dynamo_cache_limit(Bare()) is None
+    assert engine.relax_dynamo_cache_limit(None) is None
+
+
+def test_batched_generator_relaxes_the_ceiling_on_construction():
+    """Regression: variable batch shapes used to abort long runs mid-flight."""
+    inner = FakeInner()
+    torch_module, config = _torch_with_limit(8)
+    inner.torch = torch_module
+    engine.BatchedGenerator(inner, batch_size=4)
+    assert config.cache_size_limit == engine.DYNAMO_CACHE_SIZE_LIMIT
+
+
+# --------------------------------------------------------------------------- #
 # Fallbacks
 # --------------------------------------------------------------------------- #
 

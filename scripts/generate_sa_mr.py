@@ -318,6 +318,10 @@ def run_structural_checks(
         if not low <= ratio <= high:
             raise SAMRGenerationError(f"length_ratio_out_of_bounds:{ratio:.2f}")
 
+    # Both leak checks flag only what the *generator introduced*.  Comparing
+    # against the source matters: an ordinary review can legitimately say
+    # "here is the..." or "I cannot recommend...", and a deterministic case
+    # transform inherits every one of the source's own words.
     source_leaks = {match.group(0).casefold() for match in _LABEL_LEAK_RE.finditer(source_text)}
     followup_leaks = {
         match.group(0).casefold() for match in _LABEL_LEAK_RE.finditer(followup_text)
@@ -326,9 +330,14 @@ def run_structural_checks(
     if introduced:
         raise SAMRGenerationError(f"label_word_leak:{sorted(introduced)[0]}")
 
-    meta_match = _META_LEAK_RE.search(followup_text)
-    if meta_match:
-        raise SAMRGenerationError(f"meta_leak:{meta_match.group(0).casefold()}")
+    source_meta = {match.group(0).casefold() for match in _META_LEAK_RE.finditer(source_text)}
+    introduced_meta = [
+        match.group(0).casefold()
+        for match in _META_LEAK_RE.finditer(followup_text)
+        if match.group(0).casefold() not in source_meta
+    ]
+    if introduced_meta:
+        raise SAMRGenerationError(f"meta_leak:{introduced_meta[0]}")
 
     return {
         "text_nonempty": True,
@@ -345,7 +354,13 @@ def validate_mr_output(
     response: str, task: MRGenTask, definition: catalog.MRDefinition
 ) -> dict[str, Any]:
     """Parse a generator response into ``{text, followup_label}``."""
-    value = extract_json_object(response)
+    try:
+        value = extract_json_object(response)
+    except GenerationError as exc:
+        # extract_json_object raises the *base* GenerationError, which the retry
+        # loop does not catch (it catches the MR subclasses).  Without this wrap a
+        # single malformed reply escapes to main() and aborts the whole run.
+        raise SAMRGenerationError(f"unparseable_response:{exc}") from exc
     if "text" not in value:
         raise SAMRGenerationError("missing_field:text")
     raw_text = value["text"]
@@ -639,6 +654,29 @@ def resolve_model_references(args: argparse.Namespace) -> tuple[str, str]:
 # Batched generation and verification
 # --------------------------------------------------------------------------- #
 
+#: TorchDynamo recompiles the decoder for every distinct batch shape and aborts
+#: the process once it exceeds ``cache_size_limit`` (8 by default).  Batching
+#: produces several shapes per run -- full chunks, a short final chunk, and
+#: different probe counts while verifying -- so the default ceiling is far too
+#: low and kills long runs mid-flight.
+DYNAMO_CACHE_SIZE_LIMIT = 256
+
+
+def relax_dynamo_cache_limit(torch_module: Any) -> int | None:
+    """Raise the dynamo recompilation ceiling; returns the new limit if visible."""
+    dynamo_config = getattr(
+        getattr(torch_module, "_dynamo", None), "config", None
+    )
+    if dynamo_config is None:
+        return None
+    current = getattr(dynamo_config, "cache_size_limit", None)
+    if current is None:
+        return None
+    if current < DYNAMO_CACHE_SIZE_LIMIT:
+        dynamo_config.cache_size_limit = DYNAMO_CACHE_SIZE_LIMIT
+    return dynamo_config.cache_size_limit
+
+
 class BatchedGenerator:
     """Generate several prompts in one forward pass.
 
@@ -656,6 +694,7 @@ class BatchedGenerator:
     def __init__(self, inner: Any, batch_size: int = 8) -> None:
         self.inner = inner
         self.batch_size = max(1, int(batch_size))
+        relax_dynamo_cache_limit(getattr(inner, "torch", None))
 
     # Forward the sampling knobs so TemperatureOverrideGenerator can drive these.
     @property
@@ -1154,6 +1193,10 @@ def main(
         )
         if batching_enabled:
             generator = BatchedGenerator(generator, batch_size=args.batch_size)
+        else:
+            # Still applied without batching: a long run can meet more distinct
+            # sequence shapes than the default dynamo ceiling allows.
+            relax_dynamo_cache_limit(getattr(generator, "torch", None))
         if validator_factory is not None:
             builders = validator_factory(args, generator, model_reference)
         else:

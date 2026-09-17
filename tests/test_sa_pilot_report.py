@@ -232,6 +232,33 @@ def test_agreement_from_sheets_uses_only_completed_judgements(tmp_path):
     assert result["observed_agreement"] == 0.5
 
 
+def test_agreement_reads_a_sheet_that_has_a_utf8_bom(tmp_path):
+    """Regression: spreadsheet exports add a BOM, which used to hide 'group_id'."""
+    sheet_a = tmp_path / "a.csv"
+    sheet_b = tmp_path / "b.csv"
+    sheet_a.write_text("﻿group_id,relation_valid\ng1,yes\n", encoding="utf-8")
+    sheet_b.write_text("group_id,relation_valid\ng1,yes\n", encoding="utf-8")
+    result = report.agreement_from_sheets(sheet_a, sheet_b, "relation_valid")
+    assert result["n"] == 1
+    assert result["observed_agreement"] == 1.0
+
+
+def test_agreement_rejects_a_sheet_without_a_group_id_column(tmp_path):
+    bad = tmp_path / "bad.csv"
+    good = tmp_path / "good.csv"
+    bad.write_text("foo,bar\n1,2\n", encoding="utf-8")
+    good.write_text("group_id,relation_valid\ng1,yes\n", encoding="utf-8")
+    with pytest.raises(report.PilotReportError, match="group_id"):
+        report.agreement_from_sheets(bad, good, "relation_valid")
+
+
+def test_agreement_mode_does_not_require_a_pilot_root():
+    """The documented --agreement invocation must work without --pilot-root."""
+    args = report.build_parser().parse_args(["--agreement", "a.csv", "b.csv"])
+    assert args.pilot_root is None
+    assert args.agreement == ["a.csv", "b.csv"]
+
+
 def test_agreement_from_sheets_raises_when_nothing_is_filled(tmp_path):
     header = "group_id,relation_valid\n"
     sheet_a = tmp_path / "a.csv"

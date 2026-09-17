@@ -483,8 +483,16 @@ def agreement_from_sheets(path_a: Path, path_b: Path, column: str) -> dict[str, 
 
 
 def _read_csv(path: Path) -> list[dict[str, str]]:
-    with path.open("r", encoding="utf-8", newline="") as handle:
-        return list(csv.DictReader(handle))
+    # utf-8-sig transparently strips a BOM, which spreadsheet exports add and
+    # which would otherwise turn the first header into "﻿group_id".
+    with path.open("r", encoding="utf-8-sig", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    if rows and "group_id" not in rows[0]:
+        raise PilotReportError(
+            f"{path} has no 'group_id' column (found: {sorted(rows[0])[:4]}...). "
+            "Expected a review sheet produced by sa_pilot_report.py."
+        )
+    return rows
 
 
 # --------------------------------------------------------------------------- #
@@ -592,7 +600,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Recompute the SA MR pilot quality report from frozen artifacts"
     )
-    parser.add_argument("--pilot-root", required=True, help="Pilot output root")
+    parser.add_argument(
+        "--pilot-root",
+        default=None,
+        help="Pilot output root. Required unless --agreement is used, which reads two sheets directly.",
+    )
     parser.add_argument("--datasets", default="imdb,sst2")
     parser.add_argument("--report-output", default=None)
     parser.add_argument("--review-per-mr", type=int, default=0, help="Write review artifacts if > 0")
@@ -685,6 +697,8 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(result, indent=2))
             return 0
 
+        if not args.pilot_root:
+            raise PilotReportError("--pilot-root is required unless --agreement is used")
         pilot_root = Path(args.pilot_root).expanduser().resolve()
         datasets = [name.strip() for name in args.datasets.split(",") if name.strip()]
         report = build_report(pilot_root, datasets)

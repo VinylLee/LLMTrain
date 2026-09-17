@@ -246,6 +246,42 @@ def test_label_words_already_in_the_source_are_not_treated_as_a_leak(tmp_path):
     assert len(read_jsonl(output)) == 2
 
 
+def test_meta_terms_already_in_the_source_are_not_treated_as_a_leak(tmp_path):
+    """Regression: the source's own wording must not poison its follow-up.
+
+    Five pilot groups were wrongly rejected because the review itself contained
+    "here is the" / "I cannot"; for a deterministic case transform every word is
+    inherited from the source, so those rejections could never be genuine.
+    """
+    text = "The difference here is the acting, and I cannot recommend this film to anyone."
+    _, output = run_engine(
+        tmp_path,
+        source_rows((text, "negative")),
+        mrs=["sa_case_reversal"],
+        labels_by_text={},
+        default="negative",
+    )
+    assert len(read_jsonl(output)) == 2
+
+
+def test_meta_terms_introduced_by_the_generator_are_still_rejected(tmp_path):
+    """The source-aware comparison must not open a hole for real meta commentary."""
+    generator = FakeMrGenerator(
+        reply=lambda text, label: json.dumps(
+            {"text": "Here is the rewritten review you asked for about a director."}
+        )
+    )
+    code, _ = run_engine(
+        tmp_path,
+        source_rows((SOURCE_TEXT, "positive")),
+        mrs=["sa_tense_shift"],
+        labels_by_text={},
+        default="positive",
+        generator=generator,
+    )
+    assert code == 2
+
+
 def test_meta_commentary_is_rejected(tmp_path):
     generator = FakeMrGenerator(
         reply=lambda text, label: json.dumps(
@@ -575,6 +611,62 @@ def test_dry_run_previews_the_deterministic_mr_without_a_prompt(tmp_path, capsys
 # --------------------------------------------------------------------------- #
 # Report
 # --------------------------------------------------------------------------- #
+
+def test_unparseable_response_is_retried_not_fatal(tmp_path):
+    """Regression: one malformed reply used to abort the entire run.
+
+    ``extract_json_object`` raises the base ``GenerationError`` while the loop only
+    caught ``SAMRGenerationError`` / ``MRDeclined``, so a non-JSON reply escaped to
+    ``main()`` and killed the pilot mid-flight.  A truncated IMDb rewrite is
+    enough to trigger it, which is exactly what happened on the real run.
+    """
+    generator = FakeMrGenerator(
+        reply=lambda text, label: "I'm sorry, I can't rewrite that review."
+    )
+    code, output = run_engine(
+        tmp_path,
+        source_rows((SOURCE_TEXT, "positive")),
+        mrs=["sa_tense_shift"],
+        labels_by_text={},
+        default="positive",
+        generator=generator,
+    )
+    assert code == 2, "a malformed reply is a failed group, not an aborted run"
+    report = json.loads(Path(str(output) + ".report.json").read_text(encoding="utf-8"))
+    assert report["accepted_groups"] == 0
+    reasons = report["rejected_attempts_by_reason"]
+    assert any("unparseable_response" in str(key) for key in reasons), reasons
+
+
+def test_unparseable_response_leaves_other_groups_untouched(tmp_path):
+    """A malformed reply for one source must not cost the others their result."""
+    calls = {"n": 0}
+
+    def reply(text, label):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return "not json at all"
+        return json.dumps({"text": text.replace(" was ", " is ")})
+
+    generator = FakeMrGenerator(reply=reply)
+    rows = source_rows((SOURCE_TEXT, "positive"), (SOURCE_TEXT_NEG, "negative"))
+    # The preserve gate needs each follow-up to read like its own source, and the
+    # two sources have opposite labels, so key the validator by text.
+    labels = {
+        SOURCE_TEXT.replace(" was ", " is "): "positive",
+        SOURCE_TEXT_NEG.replace(" was ", " is "): "negative",
+    }
+    code, output = run_engine(
+        tmp_path,
+        rows,
+        mrs=["sa_tense_shift"],
+        labels_by_text=labels,
+        generator=generator,
+    )
+    followups = [row for row in read_jsonl(output) if not row["is_source"]]
+    assert len(followups) == 1, "the healthy group must still be written"
+    assert code == 2, "the malformed group is still reported as a failure"
+
 
 def test_deterministic_gate_failure_is_terminal_not_a_crash(tmp_path):
     """Regression: a failed deterministic MR must not be queued for a retry.
