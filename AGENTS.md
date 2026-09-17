@@ -2,6 +2,8 @@
 
 本文件供后续进入仓库的编码代理自动读取。开始工作前先读根目录 `PROJECT_OVERVIEW.md`；它是项目结构、数据流和脚本职责的详细说明。已有 `CLAUDE.md` 主要描述 API 推理流程，可作为补充，但没有完整覆盖当前三种子 LoRA 实验。
 
+> **做情感分析（SA）任务前，先读 `RQ1/SA_MR_PIPELINE_HANDOFF.md`**。那是 SA 管线（数据集导入 / 8 个 SA MR / pilot / 人工复核）的完整交接文档与当前唯一入口。切记：**SA 的 MR catalog 尚未冻结，不得启动任何 SA 训练。**
+
 ## 项目目标
 
 项目研究 MetTrain：把蜕变关系（Metamorphic Relations, MR）用于自然语言推断（NLI）的数据增强、半监督训练和鲁棒性测试。目前核心任务包括 SNLI、MNLI matched（`mnlim`）、MNLI mismatched（`mnlimm`）、SICK 与二分类 RTE。
@@ -33,8 +35,11 @@
 - **改 RQ2 / MR-instruction 相关代码前，先读 `RQ2/RQ2_V4_DESIGN_SUMMARY.md`**——它是 RQ2 当前状态的唯一入口说明（数据集、模板组装、Pair/Operation/Relation/Label 设计、每个 MR 的 description、已知泄漏与对照风险）。细节文档：`RQ2/RQ2_INSTRUCTION_DESIGN_V4.md`、`RQ2/MR_RELATION_AUDIT_V4.md`、`RQ2/RQ2_INSTRUCTION_DESIGN.md`（共享矩阵 + 冻结的 v3 措辞）、`RQ2/MR_RELATION_AUDIT.md`。
 - RQ2 instruction 设计已升级到 **v4**（2026-09-16，ordered provenance-explicit Operation + constraint-form Relation）：Operation 从「一句通用 provenance」改为由 `component_mrs` 展开的**有序 transformation trace**（`1. … 2. …`，绝不排序/去重），Relation 从 totalized `flip` 映射改为**适用性受限的约束语句**（`invariance` / `entailment_to_contradiction` / `entailment_to_neutral`，一律用 `must`）。实验矩阵、block 顺序、controls、`full_oracle`(L=1) 语义与 v3 完全一致。`instruction_template_version` 当前为 **4**；**v3 冻结**（重新生成 v3 的 33 个产物逐字节一致，由 `tests/fixtures/rq2_v3_instruction_golden.json` 守卫），v2 同样冻结。v4 使用**不同的 cohort 文件**（`...-v3_3/augmented_data_all_label_mrs_v3_3_full.json`，486 个 composite 100% 带有序 provenance），因为 v3 cohort 的 composite **完全没有** component provenance 且无 generation log 可恢复（已审计确认）；两个 cohort 的 source rows 相同但 metamorphic examples 不同，**结果不可逐例比较**。v4 目录：`RQ2/data/cohorts_v4/`、`RQ2/data/converted_v4/`、`RQ2/output/gemma3_4b_nli_grounded_v4/`，config 为 `RQ2/configs/rq2_snli_config_v4.json`（启用 `require_composite_provenance`，composite 缺 provenance 直接 fail）。文档 `RQ2/RQ2_INSTRUCTION_DESIGN_V4.md`、`RQ2/MR_RELATION_AUDIT_V4.md`；工具 `scripts/audit_rq2_v4_provenance.py`、`scripts/inspect_rq2_instructions.py --template-version 4`。
 
+- **SA（情感分析）RQ1 路线已起步但停在质量门（2026-09-17）**，完整交接见 `RQ1/SA_MR_PIPELINE_HANDOFF.md`。依据 `.research/LLMTrain/RQ1_情感分析任务路线_v3(1).md`，已完成的只是该文档 §15 的 **Phase 1 + Phase 4**：五域数据（IMDb CAD 1707/245/488、SST-2、Amazon、Yelp、Twitter）导入并冻结、8 个 SA MR 全部实现且有测试、IMDb+SST-2 pilot 跑完（90 accepted group）。**结论是 MR catalog 不能按现状冻结**：两名标注者人工复核显示 8 个 MR 里 **6 个的 transformation validity 为 0%**（门槛 0.95），只有 `sa_uninformative_context` 一致 100% 通过。根因是 **Gemma-3-4b 不做受控最小编辑而做自由改写**（要求"加否定词"它去替换评价词）——凡要求受控最小编辑的 MR 全灭，唯一活下来的是"加法式"操作。关键对照：`relation_valid` 59/59 全通过，即**极性关系成立、失败的纯粹是转换保真度**，自动检查过不了这一关。`sa_case_reversal` 的 12% 低分是 **codebook 未写明 lower/upper/swap 三模式**造成的规范缺陷（复核者按严格 swapcase 判），重判后大概率翻为 yes。因此**下一步是改生成方式（先定位 span 再确定性替换的两段式，或换更强生成器），不是调数据**；不要启动任何 SA 训练。SA 代码在 `scripts/sa_*.py` + `scripts/{download_sa_datasets,generate_sa_mr,run_sa_mr_pilot,sa_pilot_report}.py`，测试在 `tests/test_sa_*.py`。注意 MR 生成端在**另一个仓库** `/home/ubuntu/MTrain`（NLI 生成流程见其 `AUGMENTATION_PIPELINE.md`），SA 生成器后续放哪一侧待定。
+
 ## 目录约定
 
+- `data/sa/`：情感分析（SA）任务数据，与 `data/nli/` 平级；`data/sa/MR_testing/_pilot_v4/` 是 pilot 结果与人工复核材料。**该目录在 `.gitignore` 内**，manifest 与报告不受版本控制。
 - `data/nli/original_dataset/`：规范 Original 数据。
 - `data/nli/mettrain/`：不同数据集和生成模型的 MetTrain 数据；文件多且包含大量历史变体。
 - `data/nli/MR_testing/`：按数据集组织的 9 类 MR 测试数据。
