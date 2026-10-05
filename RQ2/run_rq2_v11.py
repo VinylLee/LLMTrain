@@ -585,9 +585,9 @@ class Pipeline:
         save_json(self.root / f"seed{seed}_review.json", {**report, "records": [r for r in records if r["seed"] == seed]})
         self.event("seed_complete", seed=seed, verified_result_files=len(records), final_complete=report["complete"])
 
-    def run(self, prepare_only=False):
+    def run(self, prepare_only=False, seed42_only=False):
         self.preflight()
-        for seed in self.cfg["seeds"]:
+        for seed in ([42] if seed42_only else self.cfg["seeds"]):
             self.prepare_seed(seed)
             if prepare_only:
                 return
@@ -603,7 +603,11 @@ class Pipeline:
                     self.train(seed, mode)
                 self.evaluate(seed, mode)
             self.summarize(seed)
-        self.event("completed", seed_order=self.cfg["seeds"], verified_results=42)
+        if seed42_only:
+            self.event("seed42_review_gate", seed=42, verified_results=14,
+                       note="Stopped before seed43/44; no new formal training launched")
+        else:
+            self.event("completed", seed_order=self.cfg["seeds"], verified_results=42)
 
 
 def worker(kind, budget, spare, arguments):
@@ -634,6 +638,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", default=DEFAULT_CONFIG)
     parser.add_argument("--prepare-only", action="store_true", help="CPU checks and seed42 audit only; no GPU work")
+    parser.add_argument("--seed42-only", action="store_true", help="Only smoke/evaluate existing seed42 adapters, then stop before seed43/44")
     parser.add_argument("--worker", choices=("training", "inference"), help=argparse.SUPPRESS)
     parser.add_argument("--budget-mib", type=int, help=argparse.SUPPRESS)
     parser.add_argument("--spare-mib", type=int, default=4096, help=argparse.SUPPRESS)
@@ -646,9 +651,9 @@ def main():
     pipeline.root.mkdir(parents=True, exist_ok=True)
     with (pipeline.root / ".runner.lock").open("a") as lock:
         fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        pipeline.event("started", pid=os.getpid(), prepare_only=args.prepare_only)
+        pipeline.event("started", pid=os.getpid(), prepare_only=args.prepare_only, seed42_only=args.seed42_only)
         try:
-            pipeline.run(args.prepare_only)
+            pipeline.run(args.prepare_only, args.seed42_only)
         except Exception as exc:
             pipeline.event("failed", error=str(exc))
             raise

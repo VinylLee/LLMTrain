@@ -82,6 +82,41 @@ def test_gpu_worker_admission_requeues_before_model_load(monkeypatch):
     assert exc.value.code == 75
 
 
+def test_seed42_review_gate_never_prepares_or_trains_later_seeds():
+    class FakePipeline:
+        cfg = {"seeds": [42, 43, 44]}
+        base = {"modes": ["none", "full_oracle"]}
+
+        def __init__(self):
+            self.prepared = []
+            self.evaluated = []
+            self.events = []
+
+        def preflight(self):
+            pass
+
+        def prepare_seed(self, seed):
+            self.prepared.append(seed)
+
+        def train(self, *args, **kwargs):
+            raise AssertionError("No training allowed through seed42 review gate")
+
+        def evaluate(self, seed, mode, **kwargs):
+            self.evaluated.append((seed, mode))
+
+        def summarize(self, seed):
+            assert seed == 42
+
+        def event(self, status, **kwargs):
+            self.events.append(status)
+
+    fake = FakePipeline()
+    pipeline.Pipeline.run(fake, seed42_only=True)
+    assert fake.prepared == [42]
+    assert all(seed == 42 for seed, _ in fake.evaluated)
+    assert fake.events[-1] == "seed42_review_gate"
+
+
 def examples():
     source = dict(idx=0, pair_id="a", premise="A dog runs.", hypothesis="An animal runs.",
                   mr_id="none", mr_type="inv", label=0, is_source=True)

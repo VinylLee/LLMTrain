@@ -13,6 +13,9 @@ training. No MNLI/SICK evaluation or SA work is included.
 
 # Serial queue, verified resume of adapters/predictions/checkpoints
 /home/ubuntu/.conda/envs/llmtrain310/bin/python -u RQ2/run_rq2_v11.py
+
+# Explicit review gate: only existing seed42 adapters; no seed43/44 work
+/home/ubuntu/.conda/envs/llmtrain310/bin/python -u RQ2/run_rq2_v11.py --seed42-only
 ```
 
 The overlay `RQ2/configs/rq2_snli_config_v4_test_v1_1.json` keeps the original
@@ -102,3 +105,9 @@ Backed up before edits on remote branch
 `backup/rq2-v4-pre-v11-20261005-210439`, commit
 `03ebc34fc52dbeb8f0435fbd359c579782b4570e`. The snapshot commit is empty because
 the RQ2 source was already committed; unrelated dirty SA files were not staged.
+
+The execution platform rejected the full unattended queue, interpreting an older
+seed42-review requirement as still binding. The safe staged launch therefore uses
+`--seed42-only`. It cannot prepare or train seeds 43/44; after the review gate,
+their full-queue launch needs authorization accepted by the platform. No refused
+command is bypassed or launched indirectly.
