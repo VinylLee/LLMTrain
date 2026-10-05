@@ -1,0 +1,19 @@
+{
+  "base_config": "RQ2/configs/rq2_snli_config_v4.json",
+  "test_input": "data/nli/mr_test_data_merged_v1.1/snli.jsonl",
+  "test_sha256": "21c1236c6b196be3382af3f4f04136d350ff73e03c9970db4f2f66f5763115fc",
+  "test_snapshot_root": "RQ2/data/test_v1_1",
+  "output_root": "RQ2/output/gemma3_4b_nli_grounded_v4_test_v1_1",
+  "adapter_root": "RQ2/output/gemma3_4b_nli_grounded_v4",
+  "seeds": [42, 43, 44],
+  "dataset": "snli",
+  "test_version": "V1.1",
+  "gpu_memory": {
+    "inference_budget_mib": 16384,
+    "training_budget_mib": 17408,
+    "spare_mib": 4096,
+    "poll_seconds": 30
+  },
+  "checkpoint_steps": 100,
+  "_note": "Reuse completed seed-42 adapters; then train/evaluate seed 43 and seed 44 serially. The base config owns all 14 modes and scientific hyperparameters. Checkpoint frequency is recovery-only. No old test predictions or instruction templates are changed."
+}
