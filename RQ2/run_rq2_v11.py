@@ -115,6 +115,7 @@ def validate_run_identity(previous, current, gpu_started):
 def code_identity():
     files = (Path(__file__).resolve(), ROOT / "scripts/mr_instruction_design.py",
              ROOT / "scripts/convert_nli_to_ft.py", ROOT / "scripts/test_mettrain_experiment.py",
+             ROOT / "scripts/inference_utils.py", ROOT / "scripts/project_runtime.py",
              ROOT / "scripts/metamorphic_metrics.py", ROOT / "RQ2/scripts/convert_snli_rq2.py",
              ROOT / "RQ2/run_rq2_snli.py")
     return {str(p.relative_to(ROOT)): sha256(p) for p in files}
