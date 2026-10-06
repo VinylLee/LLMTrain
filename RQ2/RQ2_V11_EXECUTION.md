@@ -106,8 +106,22 @@ Backed up before edits on remote branch
 `03ebc34fc52dbeb8f0435fbd359c579782b4570e`. The snapshot commit is empty because
 the RQ2 source was already committed; unrelated dirty SA files were not staged.
 
-The execution platform rejected the full unattended queue, interpreting an older
-seed42-review requirement as still binding. The safe staged launch therefore uses
-`--seed42-only`. It cannot prepare or train seeds 43/44; after the review gate,
-their full-queue launch needs authorization accepted by the platform. No refused
-command is bypassed or launched indirectly.
+On 2026-10-05 the execution platform rejected the full unattended queue,
+interpreting an older seed42-review requirement as still binding; even the
+restricted `--seed42-only` launch timed out during review. No GPU job launched
+that day and no refused command was bypassed.
+
+On 2026-10-06 the user explicitly authorized: **允许 seed 42 新版评测通过工程检查后，
+无需再次人工审批，继续 seed 43 和 44 的训练与评测**. The platform accepted the full
+serial queue. It started with PID `798538` using the default command (without
+`--seed42-only`). The 230 RQ2-related regression checks passed. Seed42 `none`
+and `full_oracle` inference smoke each passed 115-row identity/pairing checks
+with zero invalid predictions; the full seed42 `none` evaluation then started
+on GPU 1. These are startup/health confirmations, not final experimental results.
+Subsequent jobs reselect a GPU by available memory. Seed43/44 may now proceed
+automatically after the preceding seed's engineering checks; errors still stop
+the queue. Check `_progress.json` and verified reports for current completion.
+
+The feature branch `feature/rq2-v4-v11-evaluation-20261005-210439` was successfully
+pushed on 2026-10-06 (code commit `39bc13e`). Old SA/RQ1 dirty worktree changes
+remain outside the RQ2 commits.
